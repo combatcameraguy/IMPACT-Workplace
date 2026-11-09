@@ -1984,6 +1984,8 @@ function getCandidateEndpoints() {
     }
   };
 
+  addIfValid(`${window.location.origin}/ollama`);
+
   addIfValid('http://100.124.111.28:11434');
   
   if (state.detectedIP) {

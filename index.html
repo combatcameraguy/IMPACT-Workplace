@@ -1733,6 +1733,7 @@ let state = {
   detectedIP: '',
   isWebConnectivityActive: localStorage.getItem('aiHub_webActive') === 'true',
   usingServerProxy: false,
+  authed: false,
   isTurbo: localStorage.getItem('aiHub_turbo') !== 'false'
 };
 
@@ -1751,7 +1752,7 @@ document.addEventListener('DOMContentLoaded', () => {
   populateThemeGrids();
   syncToggleStates();
   syncWebButtonUI();
-  checkConnection().then(() => loadModels());
+  updateConnStatus(false, null, 'Sign in to connect');
   renderChatList();
   updateMemorySize();
   detectLocalIP();
@@ -1990,89 +1991,98 @@ function setTheme(themeId) {
 
 function applyTheme(themeId) { document.body.setAttribute('data-theme', themeId); }
 
-// ===== CONNECTIVITY (SMART RESOLVER FOR iPad/LAN/MOBILE) =====
-function getCandidateEndpoints() {
-  const seen = new Set();
-  const list = [];
+// ===== CONNECTIVITY (HTTPS-SAFE RESOLVER) =====
+function isHttpsPage() { return window.location.protocol === 'https:'; }
 
-  const addIfValid = (url) => {
-    if (!url) return;
-    const cleanUrl = url.replace(/\/$/, ''); 
-    if (!seen.has(cleanUrl)) {
-      seen.add(cleanUrl);
-      list.push(cleanUrl);
-    }
+function getSameOriginProxy() {
+  return window.location.protocol.startsWith('http')
+    ? `${window.location.origin}/ollama`
+    : null;
+}
+
+function getCandidateEndpoints() {
+  const seen = new Set(); const list = [];
+  const add = (u) => {
+    if (!u) return;
+    const c = u.replace(/\/$/, '');
+    if (seen.has(c)) return;
+    seen.add(c); list.push(c);
   };
 
-  addIfValid(`${window.location.origin}/ollama`);
+  // Same-origin proxy always wins. Works on LAN, tunnel, or funnel.
+  add(getSameOriginProxy());
 
-  addIfValid('http://100.124.111.28:11434');
-  
-  if (state.detectedIP) {
-    addIfValid(`http://${state.detectedIP}:11434`);
-    addIfValid(`http://${state.detectedIP}.local:11434`);
+  // Direct probes only on plain HTTP. On HTTPS the browser blocks
+  // them as mixed content, so probing just wastes round trips.
+  if (!isHttpsPage()) {
+    add('http://100.124.111.28:11434');
+    if (state.detectedIP) add(`http://${state.detectedIP}:11434`);
+    if (state.settings.endpoint) add(state.settings.endpoint);
+    if (window.location.hostname && window.location.hostname !== 'localhost') {
+      add(`http://${window.location.hostname}:11434`);
+    }
+    add('http://localhost:11434');
   }
-
-  if (state.settings.endpoint) {
-    addIfValid(state.settings.endpoint);
-  }
-
-  if (window.location.hostname && window.location.hostname !== 'localhost') {
-    addIfValid(`http://${window.location.hostname}:11434`);
-  }
-
-  addIfValid('http://localhost:11434');
-
   return list;
 }
 
 function getActiveOllamaBase() {
-  let base = state.usingServerProxy 
-    ? `${window.location.origin}/ollama` 
-    : (state.settings.endpoint || 'http://100.124.111.28:11434');
-  
-  return base.replace(/\/$/, '');
+  const sameOrigin = getSameOriginProxy();
+  if (sameOrigin && (isHttpsPage() || state.usingServerProxy)) return sameOrigin;
+
+  const saved = (state.settings.endpoint || '').replace(/\/$/, '');
+  if (saved && !(isHttpsPage() && saved.startsWith('http://'))) return saved;
+
+  return sameOrigin || 'http://127.0.0.1:11434';
 }
 
-function updateConnStatus(connected, endpoint) {
+function updateConnStatus(connected, endpoint, reason) {
   const el = document.getElementById('connStatus');
   const text = document.getElementById('connText');
-  
   if (connected && endpoint) {
-    state.usingServerProxy = endpoint.includes('/ollama') || window.location.origin === new URL(endpoint).origin;
-    
+    state.usingServerProxy = endpoint === getSameOriginProxy();
     el.className = 'connection-status connected';
     el.style.background = 'rgba(0,206,201,0.08)';
     el.style.color = 'var(--accent-green)';
-    
     text.innerHTML = `Connected: ${endpoint} <span class="conn-ip-badge">${ICONS.globe} Online</span>`;
   } else {
     el.className = 'connection-status disconnected';
     el.style.background = 'rgba(231,76,60,0.08)';
     el.style.color = 'var(--accent-red)';
-    text.textContent = 'Disconnected — check Ollama / network';
+    text.textContent = reason || 'Disconnected — check Ollama / network';
   }
 }
 
 async function checkConnection() {
-  const candidates = getCandidateEndpoints();
-  
-  const fetchPromises = candidates.map(ep => 
-    fetch(`${ep}/api/tags`, { method: 'GET', cache: 'no-store' })
-      .then(res => {
-        if (res.ok) return ep;
-        throw new Error('Connection failed');
-      })
-  );
-
-  try {
-    const result = await Promise.any(fetchPromises);
-    state.settings.endpoint = result;
-    updateConnStatus(true, result);
-  } catch (error) {
-    updateConnStatus(false);
+  if (!state.authed) {
+    updateConnStatus(false, null, 'Sign in to connect');
+    return false;
   }
+  // Sequential. First endpoint that actually answers wins.
+  for (const ep of getCandidateEndpoints()) {
+    try {
+      const res = await fetch(`${ep}/api/tags`, { method: 'GET', cache: 'no-store' });
+      if (res.ok) {
+        state.settings.endpoint = ep;
+        updateConnStatus(true, ep);
+        return true;
+      }
+      if (res.status === 401) {
+        updateConnStatus(false, null, 'Server rejected token (401) — re-sign in');
+        return false;
+      }
+    } catch (_) { /* try next */ }
+  }
+  updateConnStatus(false);
+  return false;
 }
+
+// Called by the Firebase module once a session exists.
+window.afterLogin = async () => {
+  state.authed = true;
+  await checkConnection();
+  await loadModels();
+};
 
 // ===== MODELS =====
 async function loadModels() {
@@ -3602,7 +3612,9 @@ window.getFirebaseAuthToken = async () => {
       loginOverlay.style.opacity = '0';
       setTimeout(() => { loginOverlay.style.display = 'none'; }, 400);
       if (typeof showToast === 'function') showToast('Authentication successful', 'success');
+      if (typeof window.afterLogin === 'function') window.afterLogin();
     } else {
+      if (typeof state !== 'undefined') state.authed = false;
       loginOverlay.style.display = 'flex';
       loginOverlay.style.opacity = '1';
     }
@@ -3629,7 +3641,16 @@ window.getFirebaseAuthToken = async () => {
       .catch((error) => {
         loginBtn.textContent = 'Authenticate';
         loginBtn.style.opacity = '1';
-        errorDiv.textContent = 'Invalid credentials. Please try again.';
+        const map = {
+          'auth/invalid-credential':     'Invalid email or password.',
+          'auth/invalid-email':          'That email address is malformed.',
+          'auth/user-disabled':          'This account has been disabled.',
+          'auth/too-many-requests':      'Too many attempts. Wait a few minutes.',
+          'auth/network-request-failed': 'Cannot reach Firebase. Check connectivity.',
+          'auth/unauthorized-domain':    'Domain not authorized in Firebase Auth settings.',
+          'auth/operation-not-allowed':  'Email/Password sign-in is disabled in Firebase console.'
+        };
+        errorDiv.textContent = map[error.code] || `${error.code || 'Error'}: ${error.message}`;
         errorDiv.style.display = 'block';
       });
   });

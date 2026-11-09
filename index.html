@@ -1656,6 +1656,26 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <script>
+// Intercept all fetch calls targeting our local backend and attach the Firebase token
+const originalFetch = window.fetch;
+window.fetch = async function(resource, config) {
+  if (typeof resource === 'string' && (resource.includes('/api/') || resource.includes('/ollama'))) {
+    config = config || {};
+    config.headers = config.headers || {};
+    if (window.getFirebaseAuthToken) {
+      const token = await window.getFirebaseAuthToken();
+      if (token) {
+        if (config.headers instanceof Headers) {
+          config.headers.set('Authorization', 'Bearer ' + token);
+        } else {
+          config.headers['Authorization'] = 'Bearer ' + token;
+        }
+      }
+    }
+  }
+  return originalFetch.call(this, resource, config);
+};
+
 // ===== MINIMALIST OUTLINE SVG ICON DEFINITIONS =====
 const ICONS = {
   chat: `<svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
@@ -3563,6 +3583,12 @@ if (window.innerWidth <= 768) {
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
+  // Expose token globally so the main script can attach it to server requests
+window.getFirebaseAuthToken = async () => {
+  const user = auth.currentUser;
+  if (user) return await user.getIdToken();
+  return null;
+};
 
   const loginOverlay = document.getElementById('loginOverlay');
   const loginBtn = document.getElementById('loginBtn');

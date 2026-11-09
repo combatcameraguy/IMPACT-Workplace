@@ -1148,7 +1148,7 @@
           <svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           Ollama Endpoint
         </div>
-        <input type="text" class="adv-setting-input" id="advOllamaEndpoint" value="http://100.124.111.28:11434" placeholder="http://localhost:11434">
+        <input type="text" class="adv-setting-input" id="advOllamaEndpoint" value="http://192.168.1.195:8000/ollama" placeholder="http://localhost:11434">
       </div>
 
       <!-- Hidden advanced model parameters -->
@@ -1465,7 +1465,7 @@
           <svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           Ollama Endpoint
         </div>
-        <input type="text" class="setting-input" id="modalOllamaEndpoint" value="http://100.124.111.28:11434">
+        <input type="text" class="setting-input" id="modalOllamaEndpoint" value="http://192.168.1.195:8000/ollama">
       </div>
 
       <div class="setting-group">
@@ -1717,7 +1717,7 @@ let state = {
 };
 
 const defaultSettings = {
-  endpoint: 'http://100.124.111.28:11434',
+  endpoint: 'http://192.168.1.195:8000/ollama', 
   temperature: 0.1, topP: 0.9, contextLength: 131072, repeatPenalty: 1.1, gpuLayers: 99,
   systemPrompt: 'You are a helpful AI assistant with agentic capabilities. You can reason step by step, call tools when needed, and maintain context across conversations using memory. Never use emoji or emoticon in response.',
   memoryContext: '', agentTools: JSON.stringify([{type:'function',function:{name:'web_search',description:'Search the web for information'}},{type:'function',function:{name:'execute_code',description:'Execute Python code'}}],null,2),

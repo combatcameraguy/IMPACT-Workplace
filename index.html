@@ -1711,9 +1711,9 @@ let state = {
   preserveThinking: localStorage.getItem('aiHub_preserveThinking') !== 'false',
   pendingAttachments: [],
   detectedIP: '',
-  isWebConnectivityActive: localStorage.getItem('aiHub_webActive') !== 'false',
+  isWebConnectivityActive: localStorage.getItem('aiHub_webActive') === 'true',
   usingServerProxy: false,
-  isTurbo: localStorage.getItem('aiHub_turbo') === 'true'
+  isTurbo: localStorage.getItem('aiHub_turbo') !== 'false'
 };
 
 const defaultSettings = {

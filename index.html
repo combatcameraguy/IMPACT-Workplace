@@ -2967,36 +2967,67 @@ function getMemoryContext() {
 }
 
 // ===== COPY RESPONSE =====
+function getNodePlainText(n){
+  if(n.nodeType===3) return n.textContent;
+  if(n.nodeType!==1) return '';
+  if(n.classList && (n.classList.contains('copy-code-btn') || n.classList.contains('modal-close'))) return '';
+  if(n.tagName==='BUTTON' || n.tagName==='SCRIPT' || n.tagName==='STYLE' || n.tagName==='SVG') return '';
+  const tag=n.tagName.toLowerCase();
+  if(tag==='br') return '\n';
+  if(tag==='hr') return '\n----------------------------\n';
+  if(tag==='details') return ''; // skip reasoning blocks → clean answer only
+  const blocks=['div','p','h1','h2','h3','h4','h5','h6','li','ul','ol','pre','table','thead','tbody','tr','th','td','blockquote','section','article','header','footer','figure','figcaption','nav','main','aside'];
+  if(blocks.includes(tag)){
+    let kids=[...n.childNodes]; let prefix='';
+    if(tag==='div' && kids.length && kids[0].nodeType===1 && kids[0].tagName==='SPAN' && kids[0].textContent.trim()==='•'){ prefix='- '; kids=kids.slice(1); }
+    let inner=''; for(const c of kids) inner+=getNodePlainText(c);
+    inner=inner.replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+    return inner ? '\n'+inner+'\n' : '';
+  }
+  let inner=''; for(const c of n.childNodes) inner+=getNodePlainText(c);
+  return inner;
+}
+
+function getMessagePlainText(el){
+  const src = (el && el.querySelector('.message-text')) || el;
+  if(!src) return '';
+  let t = getNodePlainText(src);
+  t = t.replace(/[ \t]+/g,' ');
+  t = t.replace(/\n\s*\n/g,'\n\n');
+  t = t.replace(/\n{3,}/g,'\n\n');
+  return t.replace(/^(\n)+/,'').replace(/(\n)+$/,'').trim();
+}
+
 function copyResponse(btn) {
-  const messageText = btn.closest('.message-content').querySelector('.message-text').innerText;
+  const messageText = btn.closest('.message-content').querySelector('.message-text');
+  const text = getMessagePlainText(messageText);
 
   const onSuccess = () => {
     btn.innerHTML = checkSvgIcon;
     setTimeout(() => btn.innerHTML = copySvgIcon, 2000);
   };
 
-  const fallbackCopy = (text) => {
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    textArea.style.position = "fixed";
-    textArea.style.opacity = "0";
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-
+  const fallbackCopy = (txt) => {
+    const ta = document.createElement("textarea");
+    ta.value = txt;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
     try {
       document.execCommand('copy');
       onSuccess();
     } catch (err) {
       showToast('Copy failed. Browser restricted clipboard access.', 'error');
     }
-    document.body.removeChild(textArea);
+    document.body.removeChild(ta);
   };
 
   if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(messageText).then(onSuccess).catch(() => fallbackCopy(messageText));
+    navigator.clipboard.writeText(text).then(onSuccess).catch(() => fallbackCopy(text));
   } else {
-    fallbackCopy(messageText);
+    fallbackCopy(text);
   }
 }
 

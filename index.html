@@ -635,6 +635,16 @@
     background: var(--bg-secondary); 
   }
 
+  .topbar { position: relative; }
+  .topbar-activity {
+    position:absolute; bottom:-1px; left:0; right:0; height:2px; z-index:60;
+    background:var(--accent-primary); opacity:0; transform:scaleX(0); transform-origin:left;
+    transition:transform .6s ease, opacity .3s; pointer-events:none;
+  }
+  .topbar-activity.active { opacity:1; animation:activityScan 1.5s ease-in-out infinite alternate; }
+  .topbar-activity.error { opacity:1; background:var(--accent-red); animation:none; transform:scaleX(1); }
+  @keyframes activityScan { from{transform:scaleX(0);} to{transform:scaleX(1);} }
+
   .toggle-sidebar-btn { width: 36px; height: 36px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
   .toggle-sidebar-btn:hover { background: var(--bg-input); color: var(--text-primary); }
 
@@ -1247,6 +1257,8 @@
       <span class="pulse-dot"></span>
       <span>Live Web Active</span>
     </div>
+
+    <div class="topbar-activity"></div>
 
     <div class="topbar-actions">
       <button class="topbar-btn" onclick="openMemoryManager()" title="Memory & Knowledge Base">
@@ -3205,6 +3217,7 @@ async function sendMessage() {
     let fullReasoning = '';
 
     msgEl.innerHTML = '<div class="reasoning-container"></div><div class="answer-container streaming-cursor"></div>';
+    updateActivityLine(true);
     const reasoningEl = msgEl.querySelector('.reasoning-container');
     const answerEl = msgEl.querySelector('.answer-container');
 
@@ -3250,6 +3263,7 @@ async function sendMessage() {
     chat.messages.push({role:'assistant', content:fullContent, reasoning:fullReasoning, webSources:liveWebSources});
     saveConversations();
   } catch(err) {
+    updateActivityLine(false, err.name!=='AbortError');
     if (msgEl) {
       msgEl.classList.remove('streaming-cursor');
       const ansEl = msgEl.querySelector('.answer-container');
@@ -3260,6 +3274,7 @@ async function sendMessage() {
   }
 
   state.isStreaming = false; updateSendButton(false); saveConversations();
+  updateActivityLine(false);
 }
 
 // ===== MESSAGE RENDERING =====
@@ -3542,6 +3557,14 @@ async function verifyLinksIn(root){
     if(ok){ dot.style.animation='none'; dot.style.background='var(--accent-green)'; dot.title='reachable'; a.title=url; }
     else { dot.style.animation='none'; dot.style.background='var(--accent-red)'; dot.title='broken / unreachable'; a.style.textDecoration='line-through'; a.style.opacity='.55'; a.removeAttribute('href'); a.title=url+' (broken)'; }
   }
+}
+
+function updateActivityLine(active, isError){
+  const el = document.querySelector('.topbar-activity');
+  if(!el) return;
+  el.classList.remove('active', 'error');
+  if(isError){ el.classList.add('error'); }
+  else if(active){ el.classList.add('active'); }
 }
 
 // ===== TOAST (Outline Icons Only) =====

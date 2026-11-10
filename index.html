@@ -3392,7 +3392,7 @@ function formatMessage(text){
   text=text.replace(/^- (.+)$/gm,'<div style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--accent-primary);">•</span>$1</div>');
   text=text.replace(/^\d+\. (.+)$/gm,'<div style="padding-left:16px;">$1</div>');
   text=text.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border-color);margin:16px 0;"/>');
-  text=text.split('\n\n').map(p=>`<p>${p}</p>`).join('');
+  text=text.replace(/(https?:\/\/[^\s<>"']+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:var(--accent-secondary);text-decoration:underline;word-break:break-all;">$1</a>');
   text=text.replace(/\n/g,'<br>');
   return text;
 }

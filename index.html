@@ -1273,7 +1273,7 @@
     <div style="display: flex; align-items: center;">
       <div style="display: inline-flex; align-items: center; gap: 10px; background: var(--bg-card); padding: 6px 14px; border-radius: 24px; border: 1px solid var(--border-color);">
         <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); letter-spacing: 0.5px;">TURBO</span>
-        <div class="toggle-switch" id="turboToggle" onclick="toggleTurboMode()" title="Switch between Standard (qwen3.6:27b) and Turbo (qwen3.5)"></div>
+        <div class="toggle-switch" id="turboToggle" onclick="toggleTurboMode()" title="Switch between Standard (qwen3.6:27b) and Turbo (qwen3.5:latest)"></div>
       </div>
     </div>
 
@@ -1648,7 +1648,7 @@ const checkSvgIcon = ICONS.check;
 // ===== MODEL CONFIGURATION =====
 const MODEL_CONFIG = {
   standard: 'qwen3.6:27b',
-  turbo: 'qwen3.5'
+  turbo: 'qwen3.5:latest'
 };
 
 // ===== STATE =====

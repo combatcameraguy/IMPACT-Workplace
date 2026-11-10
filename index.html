@@ -1832,55 +1832,12 @@ function syncToggleStates() {
 function syncWebButtonUI() {
   const btn = document.getElementById('webScrapeBtn');
   const pill = document.getElementById('webStatusPill');
-  const container = document.getElementById('urlInputContainer');
-  const active = state.isWebConnectivityActive && state.webScrapeEnabled;
-  btn?.classList.toggle('active-glow', active);
-  pill?.classList.toggle('active', active);
-  if (container) container.style.display = active ? 'flex' : 'none';
-}
-
-function toggleWebConnectivity() {
-  if (!state.webScrapeEnabled) {
-    showToast('Web scraping is disabled in Advanced settings', 'info');
-    return;
-  }
-  state.isWebConnectivityActive = !state.isWebConnectivityActive;
-  localStorage.setItem('aiHub_webActive', state.isWebConnectivityActive);
-  syncWebButtonUI();
-  if (state.isWebConnectivityActive) {
-    document.getElementById('urlInputField')?.focus();
-    showToast('Web Scraper Bar Opened', 'success');
+  if (state.isWebConnectivityActive && state.webScrapeEnabled) {
+    btn?.classList.add('active-glow');
+    pill?.classList.add('active');
   } else {
-    showToast('Web Scraper Bar Closed', 'info');
-  }
-}
-
-async function submitUrlScrape() {
-  const input = document.getElementById('urlInputField');
-  const url = input?.value.trim();
-  if (!url) return;
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    showToast('Please include http:// or https://', 'error');
-    return;
-  }
-
-  updateSearchStatus(`Scraping ${url}...`);
-  const res = await scrapeWebPage(url);
-  if (res.ok && res.text) {
-    const fakeFile = {
-      name: new URL(url).hostname + ' (Scraped Page)',
-      type: 'text/plain',
-      size: new Blob([res.text]).size
-    };
-    const att = await addPendingAttachment(fakeFile, res.text);
-    state.pendingAttachments.push(att);
-    renderPendingAttachments();
-    input.value = '';
-    updateSearchStatus('Scrape complete.', true);
-    showToast('Webpage extracted successfully', 'success');
-  } else {
-    updateSearchStatus('Scrape failed.', true);
-    showToast(res.error || 'Scrape failed', 'error');
+    btn?.classList.remove('active-glow');
+    pill?.classList.remove('active');
   }
 }
 

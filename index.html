@@ -1441,7 +1441,7 @@ let state = {
 const defaultSettings = {
   endpoint: 'http://192.168.1.195:8000/ollama', 
   temperature: 0.1, topP: 0.9, contextLength: 131072, repeatPenalty: 1.1, gpuLayers: 99,
-  systemPrompt: 'You are a helpful AI assistant with agentic capabilities. You can reason step by step, call tools when needed, and maintain context across conversations using memory. Never use emoji or emoticon in response.',
+  systemPrompt: 'You are a helpful AI assistant with agentic capabilities. You can reason step by step, call tools when needed, and maintain context across conversations using memory. Never use emoji or emoticon in response. Respond in plain text only—never use Markdown formatting such as ## headers, ** bolding, or -- dividers.',
   memoryContext: '', agentTools: JSON.stringify([{type:'function',function:{name:'web_search',description:'Search the web for information'}}],null,2)
 };
 
@@ -2144,7 +2144,11 @@ function appendMessageToUI(role, content, empty = false, msgId = null) {
 
 function formatMessage(text) {
   if (!text) return '';
-  return escapeHtml(text).replace(/\n/g, '<br>');
+  const cleaned = text
+    .replace(/^#{1,6}\s+/gm, '')       // Removes ## headers at the start of lines
+    .replace(/\*\*(.*?)\*\*/g, '$1')   // Removes ** bold markers around words
+    .replace(/^\s*[-*_]{2,}\s*$/gm, ''); // Removes -- or --- horizontal divider lines
+  return escapeHtml(cleaned).replace(/\n/g, '<br>');
 }
 
 function escapeHtml(t) {

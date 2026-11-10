@@ -1063,7 +1063,7 @@
 
   <div class="advanced-panel" id="advancedPanel">
     <div class="advanced-content">
-      <div class="network-banner"></div>
+      <div class="network-banner" id="networkBanner"></div>
 
       <div class="theme-selector">
         <div class="theme-label">
@@ -1201,23 +1201,8 @@
           <g class="blob-cluster">
             <g style="transform-origin: 80px 60px; transform: scale(1.15) rotate(5deg);">
               <path class="wave-path-3" d="M 20,60 C 20,10 140,10 140,60 C 140,110 20,110 20,60 Z">
-  <animate attributeName="d" dur="11s" repeatCount="indefinite" calcMode="spline"
-    keyTimes="0; 0.083; 0.166; 0.25; 0.333; 0.416; 0.5; 0.583; 0.666; 0.75; 0.833; 0.916; 1"
-    keySplines="0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1"
-    values="M 20,60 C 20,10 140,10 140,60 C 140,110 20,110 20,60 Z;
-             M 20,60 C 20,30 140,30 140,60 C 140,90 20,90 20,60 Z;
-             M 20,60 C 20,90 140,90 140,60 C 140,30 20,30 20,60 Z;
-             M 20,60 C 20,10 140,10 140,60 C 140,110 20,110 20,60 Z;
-             M 20,60 C 20,30 140,30 140,60 C 140,90 20,90 20,60 Z;
-             M 20,60 C 20,90 140,90 140,60 C 140,30 20,30 20,60 Z;
-             M 20,60 C 20,10 140,10 140,60 C 140,110 20,110 20,60 Z;
-             M 20,60 C 20,30 140,30 140,60 C 140,90 20,90 20,60 Z;
-             M 20,60 C 20,90 140,90 140,60 C 140,30 20,30 20,60 Z;
-             M 20,60 C 20,10 140,10 140,60 C 140,110 20,110 20,60 Z;
-             M 20,60 C 20,30 140,30 140,60 C 140,90 20,90 20,60 Z;
-             M 20,60 C 20,90 140,90 140,60 C 140,30 20,30 20,60 Z;
-             M 20,60 C 20,10 140,10 140,60 C 140,110 20,110 20,60 Z">
-</animate>
+                <animate attributeName="d" dur="11s" repeatCount="indefinite" calcMode="spline" keyTimes="0; 0.083; 0.166; 0.25; 0.333; 0.416; 0.5; 0.583; 0.666; 0.75; 0.833; 0.916; 1" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1; 0.42 0 0.58 1" values="M 20,60 C 20,10 140,10 40,60 C 140,110 20,110 20,60 Z; M 40,45 C 50,15 120,30 10,75 C 100,105 30,90 40,45 Z; M 60,35 C 10,35 70,85 100,85 C 50,85 90,35 60,35 Z; M 75,30 C 10,15 140,70 105,90 C 50,105 20,60 75,30 Z; M 80,20 C 130,20 130,100 80,100 C 30,10 30,20 80,20 Z; M 90,25 C 120,40 100,100 65,95 C 30,85 50,30 90,25 Z; M 100,35 C 50,35 90,85 60,85 C 110,85 70,35 100,35 Z; M 115,40 C 95,15 30,30 45,75 C 65,105 10,90 115,40 Z; M 140,60 C 40,110 20,110 20,60 C 20,10 140,10 140,60 Z; M 120,75 C 10,105 40,90 50,45 C 60,15 130,30 120,75 Z; M 100,85 C 50,85 90,35 60,35 C 110,35 70,85 100,85 Z; M 85,90 C 30,105 20,50 55,30 C 110,15 140,60 85,90 Z; M 20,60 C 20,10 140,10 140,60 C 140,110 20,110 20,60 Z"/>
+              </path>
             </g>
             <g style="transform-origin: 80px 60px; transform: scale(0.85) rotate(-15deg);">
               <path class="wave-path-2" d="M 20,60 C 20,10 140,10 140,60 C 140,110 20,110 20,60 Z">
@@ -1561,12 +1546,31 @@ const defaultSettings = {
 
 Object.keys(defaultSettings).forEach(k => { if(!(k in state.settings)) state.settings[k] = defaultSettings[k]; });
 
+function populateNetworkBanner() {
+  const banner = document.getElementById('networkBanner') || document.querySelector('.network-banner');
+  if (!banner) return;
+  const host = window.location.host || '192.168.1.195:8000';
+  banner.innerHTML = `${ICONS.globe}<div><strong>Local Hub Active:</strong> Serving via <code>${escapeHtml(host)}</code><br>Ollama Endpoint: <code>${escapeHtml(state.settings.endpoint || defaultSettings.endpoint)}</code></div>`;
+}
+
+function syncAdvancedInputs() {
+  const epInput = document.getElementById('advOllamaEndpoint');
+  const sysInput = document.getElementById('advSystemPrompt');
+  const memInput = document.getElementById('advMemoryContext');
+  if (epInput) epInput.value = state.settings.endpoint || defaultSettings.endpoint;
+  if (sysInput) sysInput.value = state.settings.systemPrompt || defaultSettings.systemPrompt;
+  if (memInput) memInput.value = state.settings.memoryContext || '';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   applyTheme(state.currentTheme);
   populateThemeGrids();
   populateModalThemeGrid();
   syncToggleStates();
   syncWebButtonUI();
+  syncAdvancedInputs();
+  syncAgentGlowUI();
+  populateNetworkBanner();
   updateConnStatus(false, null, 'Sign in to connect');
   renderChatList();
   updateMemorySize();
@@ -1762,7 +1766,6 @@ function setTheme(themeId) {
 }
 
 function applyTheme(themeId) { document.body.setAttribute('data-theme', themeId); }
-function applyTheme(themeId) { document.body.setAttribute('data-theme', themeId); }
 
 function populateModalThemeGrid() {
   const modalThemeDefs = [
@@ -1787,8 +1790,6 @@ function populateModalThemeGrid() {
   if(!grid) return;
   grid.innerHTML = modalThemeDefs.map(t => `<button class="theme-btn ${t.id===state.currentTheme?'active':''}" data-theme="${t.id}" data-label="${t.label}" style="background:linear-gradient(135deg,${t.colors[0]},${t.colors[1]});" onclick="setTheme('${t.id}')"><span class="theme-check">${ICONS.checkWhite}</span></button>`).join('');
 }
-
-function isHttpsPage() { return window.location.protocol === 'https:'; }
 
 function isHttpsPage() { return window.location.protocol === 'https:'; }
 function getSameOriginProxy() { return window.location.protocol.startsWith('http') ? `${window.location.origin}/ollama` : null; }
@@ -2548,8 +2549,8 @@ function saveMemoryDocsToStorage() {
   } catch (e) {
     showToast('Storage quota reached: trimming large document content', 'error');
     state.memoryDocs.forEach(d => {
-      if (d.content && d.content.length > 50000) {
-        d.content = d.content.substring(0, 50000) + '\n...[Truncated for localStorage limit]';
+      if (d.content && d.content.length > 250000) {
+        d.content = d.content.substring(0, 250000) + '\n...[Truncated for localStorage limit]';
       }
     });
     try { localStorage.setItem('aiHub_memoryDocs', JSON.stringify(state.memoryDocs)); } catch (_) {}
@@ -2810,14 +2811,14 @@ async function sendMessage() {
   for (const att of currentAttachments) {
     if (att.extractedText && att.extractedText.trim()) {
       includedDocNames.add(att.name);
-      docContextBlocks.push(`=== UPLOADED DOCUMENT: ${att.name} ===\n${att.extractedText.substring(0, 60000)}\n=== END OF ${att.name} ===`);
+      docContextBlocks.push(`=== UPLOADED DOCUMENT: ${att.name} ===\n${att.extractedText.substring(0, 250000)}\n=== END OF ${att.name} ===`);
     }
   }
 
   const activeMemoryDocs = (state.memoryDocs || []).filter(d => d.enabled !== false && d.content && !includedDocNames.has(d.name));
   for (const doc of activeMemoryDocs) {
     includedDocNames.add(doc.name);
-    docContextBlocks.push(`=== ACTIVE KNOWLEDGE BASE DOCUMENT: ${doc.name} ===\n${doc.content.substring(0, 60000)}\n=== END OF ${doc.name} ===`);
+    docContextBlocks.push(`=== ACTIVE KNOWLEDGE BASE DOCUMENT: ${doc.name} ===\n${doc.content.substring(0, 250000)}\n=== END OF ${doc.name} ===`);
   }
 
   if (state.settings.memoryContext && state.settings.memoryContext.trim()) {
@@ -2861,8 +2862,12 @@ async function sendMessage() {
   const msgEl = document.querySelector(`[data-msg-id="${msgId}"] .message-text`);
 
   let apiMessages = [];
-  if (state.settings.systemPrompt) {
-    apiMessages.push({ role: 'system', content: state.settings.systemPrompt });
+  let systemContent = state.settings.systemPrompt || defaultSettings.systemPrompt;
+  if (state.reasoningEnabled) {
+    systemContent += '\n\nExtended Reasoning Enabled: Think carefully step-by-step through complex problems before delivering your final answer.';
+  }
+  if (systemContent) {
+    apiMessages.push({ role: 'system', content: systemContent });
   }
   if (state.preserveThinking) {
     const history = chat.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
@@ -2877,6 +2882,7 @@ async function sendMessage() {
       body: JSON.stringify({
         model: getCurrentModel(),
         messages: apiMessages,
+        think: state.reasoningEnabled,
         stream: true
       }),
       signal: state.abortController.signal
@@ -3071,16 +3077,45 @@ function openSettings() {
 }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 function saveModalSettings() {
-  state.settings.endpoint = document.getElementById('modalOllamaEndpoint').value;
-  state.settings.systemPrompt = document.getElementById('modalSystemPrompt').value;
-  state.settings.memoryContext = document.getElementById('modalMemoryContext').value;
+  const ep = document.getElementById('modalOllamaEndpoint')?.value.trim();
+  const sys = document.getElementById('modalSystemPrompt')?.value;
+  const mem = document.getElementById('modalMemoryContext')?.value;
+  if (ep) state.settings.endpoint = ep;
+  if (sys !== undefined) state.settings.systemPrompt = sys;
+  if (mem !== undefined) state.settings.memoryContext = mem;
+  syncAdvancedInputs();
+  populateNetworkBanner();
   try {
     localStorage.setItem('aiHub_settings', JSON.stringify(state.settings));
   } catch (e) {}
   closeModal('settingsModal');
   showToast('Settings saved', 'success');
 }
+
 function saveAdvancedSettings() {
+  const epInput = document.getElementById('advOllamaEndpoint');
+  const sysInput = document.getElementById('advSystemPrompt');
+  const memInput = document.getElementById('advMemoryContext');
+  if (epInput && epInput.value.trim()) state.settings.endpoint = epInput.value.trim();
+  if (sysInput && sysInput.value.trim()) state.settings.systemPrompt = sysInput.value;
+  if (memInput) state.settings.memoryContext = memInput.value;
+
+  const modalEp = document.getElementById('modalOllamaEndpoint');
+  const modalSys = document.getElementById('modalSystemPrompt');
+  const modalMem = document.getElementById('modalMemoryContext');
+  if (modalEp) modalEp.value = state.settings.endpoint || defaultSettings.endpoint;
+  if (modalSys) modalSys.value = state.settings.systemPrompt || defaultSettings.systemPrompt;
+  if (modalMem) modalMem.value = state.settings.memoryContext || '';
+
+  localStorage.setItem('aiHub_photo', state.photoEnabled);
+  localStorage.setItem('aiHub_file', state.fileEnabled);
+  localStorage.setItem('aiHub_webscrape', state.webScrapeEnabled);
+  localStorage.setItem('aiHub_vision', state.visionEnabled);
+  localStorage.setItem('aiHub_pdfocr', state.pdfOcrEnabled);
+  localStorage.setItem('aiHub_reasoning', state.reasoningEnabled);
+  localStorage.setItem('aiHub_preserveThinking', state.preserveThinking);
+  populateNetworkBanner();
+
   try {
     localStorage.setItem('aiHub_settings', JSON.stringify(state.settings));
     showToast('Settings saved', 'success');

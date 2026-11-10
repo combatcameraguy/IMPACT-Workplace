@@ -1666,9 +1666,6 @@ function submitEdit(btn) {
 // Intercept all fetch calls targeting our local backend and attach the Firebase token
 const originalFetch = window.fetch;
 
-<script>
-// Intercept all fetch calls targeting our local backend and attach the Firebase token
-const originalFetch = window.fetch;
 window.fetch = async function(resource, config) {
   if (typeof resource === 'string' && (resource.includes('/api/') || resource.includes('/ollama'))) {
     config = config || {};

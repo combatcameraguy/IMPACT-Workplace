@@ -1540,7 +1540,7 @@ let state = {
 const defaultSettings = {
   endpoint: 'http://192.168.1.195:8000/ollama', 
   temperature: 0.1, topP: 0.9, contextLength: 131072, repeatPenalty: 1.1, gpuLayers: 99,
-  systemPrompt: 'You are a helpful AI assistant with agentic capabilities. You can reason step by step, call tools when needed, and maintain context across conversations using memory. Never use emoji or emoticon in response. Respond in plain text only—never use Markdown formatting such as ## headers, ** bolding, or -- dividers.',
+  systemPrompt: 'You are a helpful AI assistant with agentic capabilities. You can reason step by step, call tools when needed, and maintain context across conversations using memory. Never use emoji or emoticon in response. Never use ## headers, ** bolding, or -- dividers.',
   memoryContext: '', agentTools: JSON.stringify([{type:'function',function:{name:'web_search',description:'Search the web for information'}}],null,2)
 };
 

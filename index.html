@@ -1603,7 +1603,11 @@ async function performLiveWebSearch(query) {
   }
 
   try {
-    const res = await fetch(`${base}/api/proxy?q=${encodeURIComponent(cleanQuery)}&depth=advanced&max_results=8`, { signal: AbortSignal.timeout(20000) });
+    const res = await fetch(`${base}/api/proxy?q=${encodeURIComponent(cleanQuery)}&depth=advanced&max_results=8&_t=${Date.now()}`, { 
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+      signal: AbortSignal.timeout(20000) 
+    });
     if (res.ok) {
       const data = await res.json();
       const rawResults = Array.isArray(data.results) ? data.results : [];

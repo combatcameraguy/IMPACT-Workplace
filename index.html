@@ -907,6 +907,61 @@
 
   .hidden-input { display: none; }
 
+  .message-text a.inline-link {
+    color: var(--accent-secondary);
+    text-decoration: underline;
+    word-break: break-all;
+  }
+  .message-text a.inline-link:hover {
+    color: var(--accent-primary);
+  }
+  .web-sources-box {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .web-sources-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .web-sources-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .web-source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--accent-secondary);
+    text-decoration: none;
+    max-width: 260px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.2s ease;
+  }
+  .web-source-chip:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+  }
+
   @media (max-width: 768px) {
     .sidebar {
       position: absolute;
@@ -1510,6 +1565,15 @@ function proxyBase() {
   return window.location.protocol.startsWith('http') ? window.location.origin : null;
 }
 
+function buildSearchQuery(rawText) {
+  const cleaned = rawText
+    .replace(/^(can you|please|could you|i need to|help me|tell me about|search for|find|look up)\s+/i, '')
+    .replace(/[^\w\s?.,'-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.substring(0, 350);
+}
+
 async function scrapeWebPage(url) {
   const base = proxyBase();
   if (!base) return { ok: false, error: 'Local server required for Tavily extraction' };
@@ -1518,7 +1582,8 @@ async function scrapeWebPage(url) {
     const res = await fetch(`${base}/api/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(25000) });
     if (res.ok) {
       const data = await res.json();
-      if (data.text) return { ok: true, text: data.text };
+      const text = data.text || data.raw_content || data.content || (Array.isArray(data.results) ? data.results.map(r => r.raw_content || r.content || '').join('\n\n') : '');
+      if (text) return { ok: true, text, url };
     }
   } catch (err) {
     console.error("Tavily extract failed:", err);
@@ -1527,9 +1592,9 @@ async function scrapeWebPage(url) {
 }
 
 async function performLiveWebSearch(query) {
-  const cleanQuery = query.replace(/[^\w\s?.-]/g, ' ').trim();
+  const cleanQuery = buildSearchQuery(query);
   if (!cleanQuery) return { text: '', results: [] };
-  updateSearchStatus(`Searching Tavily for "${cleanQuery.substring(0, 30)}"...`);
+  updateSearchStatus(`Searching Tavily for "${cleanQuery.substring(0, 45)}..."`);
   
   const base = proxyBase();
   if (!base) {
@@ -1538,11 +1603,32 @@ async function performLiveWebSearch(query) {
   }
 
   try {
-    const res = await fetch(`${base}/api/proxy?q=${encodeURIComponent(cleanQuery)}`, { signal: AbortSignal.timeout(15000) });
+    const res = await fetch(`${base}/api/proxy?q=${encodeURIComponent(cleanQuery)}&depth=advanced&max_results=8`, { signal: AbortSignal.timeout(20000) });
     if (res.ok) {
       const data = await res.json();
-      updateSearchStatus("Search complete.", true);
-      return { text: data.text || '', results: data.results || [] };
+      const rawResults = Array.isArray(data.results) ? data.results : [];
+      
+      const results = rawResults.map((r, idx) => ({
+        index: idx + 1,
+        title: r.title || r.url || `Source ${idx + 1}`,
+        url: r.url || '',
+        content: r.content || r.raw_content || r.snippet || ''
+      })).filter(r => r.url || r.content);
+
+      let formattedContext = '';
+      if (data.answer) {
+        formattedContext += `Direct Answer Summary: ${data.answer}\n\n`;
+      }
+      if (results.length > 0) {
+        formattedContext += results.map(r => 
+          `[Source ${r.index}] Title: ${r.title}\nURL: ${r.url}\nSnippet: ${r.content}`
+        ).join('\n\n');
+      } else if (data.text) {
+        formattedContext += data.text;
+      }
+
+      updateSearchStatus(`Found ${results.length || (formattedContext ? 1 : 0)} web sources.`, true);
+      return { text: formattedContext.trim(), results };
     }
   } catch (e) {
     console.error("Tavily search error:", e);
@@ -1550,6 +1636,18 @@ async function performLiveWebSearch(query) {
   
   updateSearchStatus("Search complete.", true);
   return { text: '', results: [] };
+}
+
+function renderSourcesHTML(results) {
+  if (!results || results.length === 0) return '';
+  const valid = results.filter(r => r.url);
+  if (valid.length === 0) return '';
+  const chips = valid.map((r, idx) => {
+    let label = r.title || r.url;
+    try { if (!r.title) label = new URL(r.url).hostname.replace(/^www\./, ''); } catch (_) {}
+    return `<a class="web-source-chip" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(r.url)}">[${idx + 1}] ${escapeHtml(label)}</a>`;
+  }).join('');
+  return `<div class="web-sources-box"><div class="web-sources-title">${ICONS.globe} Web Sources</div><div class="web-sources-list">${chips}</div></div>`;
 }
 
 let currentStatusTracker = null;
@@ -2016,6 +2114,7 @@ async function sendMessage() {
   appendMessageWithAttachments('user', text, currentAttachments);
 
   let finalPrompt = text;
+  let searchSources = [];
   if (state.isWebConnectivityActive && state.webScrapeEnabled) {
     const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
     if (urlMatch) {
@@ -2023,17 +2122,17 @@ async function sendMessage() {
       updateSearchStatus(`Scraping ${targetUrl} via Tavily...`);
       const scrapeRes = await scrapeWebPage(targetUrl);
       if (scrapeRes.ok && scrapeRes.text) {
-        finalPrompt += `\n\n[Web Page Content from ${targetUrl}]:\n${scrapeRes.text.substring(0, 15000)}`;
+        searchSources = [{ title: targetUrl, url: targetUrl }];
+        finalPrompt += `\n\n[Web Page Content from ${targetUrl}]:\n${scrapeRes.text.substring(0, 15000)}\n\nInstruction: Use the scraped content above to answer and include the source URL (${targetUrl}) in your response.`;
         updateSearchStatus("Scrape complete.", true);
       } else {
         updateSearchStatus("Scrape failed.", true);
       }
     } else {
-      updateSearchStatus(`Searching web via Tavily...`);
       const searchRes = await performLiveWebSearch(text);
+      searchSources = searchRes.results || [];
       if (searchRes.text) {
-        finalPrompt += `\n\n[Live Tavily Web Search Results]:\n${searchRes.text}`;
-        updateSearchStatus("Search complete.", true);
+        finalPrompt += `\n\n[Live Tavily Web Search Results]:\n${searchRes.text}\n\nInstruction: Use the search results above to provide a thorough, accurate answer. You MUST cite your sources inline and include the full https:// URL for every source you reference.`;
       } else {
         updateSearchStatus("Search complete (no results).", true);
       }
@@ -2097,6 +2196,9 @@ async function sendMessage() {
     }
 
     answerEl.classList.remove('streaming-cursor');
+    if (searchSources.length > 0) {
+      msgEl.insertAdjacentHTML('beforeend', renderSourcesHTML(searchSources));
+    }
     chat.messages.push({ role: 'assistant', content: fullContent });
     saveConversations();
   } catch(err) {
@@ -2147,8 +2249,21 @@ function formatMessage(text) {
   const cleaned = text
     .replace(/^#{1,6}\s+/gm, '')       // Removes ## headers at the start of lines
     .replace(/\*\*(.*?)\*\*/g, '$1')   // Removes ** bold markers around words
-    .replace(/^\s*[-*_]{2,}\s*$/gm, ''); // Removes -- or --- horizontal divider lines
-  return escapeHtml(cleaned).replace(/\n/g, '<br>');
+    .replace(/^\s*[-*_]{2,}\s*$/gm, '') // Removes -- or --- horizontal divider lines
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1 ($2)'); // Unwraps markdown links to Title (URL)
+
+  const escaped = escapeHtml(cleaned);
+
+  const linked = escaped.replace(
+    /(https?:\/\/[^\s<)"']+)/g,
+    (url) => {
+      const cleanUrl = url.replace(/[.,;!?]+$/, '');
+      const trailing = url.slice(cleanUrl.length);
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="inline-link">${cleanUrl}</a>${trailing}`;
+    }
+  );
+
+  return linked.replace(/\n/g, '<br>');
 }
 
 function escapeHtml(t) {

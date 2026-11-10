@@ -3214,7 +3214,7 @@ async function sendMessage() {
     const finalAnswer = document.createElement('div');
     finalAnswer.className = 'answer-container';
     finalAnswer.innerHTML = formatMessage(fullContent);
-    msgEl.appendChild(finalAnswer);
+    msgEl.appendChild(finalAnswer); verifyLinksIn(msgEl);
     
     chat.messages.push({role:'assistant', content:fullContent, reasoning:fullReasoning, webSources:liveWebSources});
     saveConversations();
@@ -3351,7 +3351,7 @@ function appendMessageWithAttachments(role, content, attachments, webSources = n
   const bodyRowHTML = `<div class="message-body-row"><div class="message-text">${formatMessage(content)}</div>${actionsHTML}</div>`;
 
   div.innerHTML = `<div class="message-avatar">${avatarIcon}</div><div class="message-content">${headerHTML}${webBoxHTML}${attachmentHTML}${bodyRowHTML}${ocrBlocks}</div>`;
-  container.appendChild(div); scrollToBottom();
+  container.appendChild(div); scrollToBottom(); verifyLinksIn(div);
 }
 
 function appendMessageToUI(role,content,empty=false,msgId=null,webSources=null){
@@ -3364,7 +3364,7 @@ function appendMessageToUI(role,content,empty=false,msgId=null,webSources=null){
   const bodyRowHTML = `<div class="message-body-row">${contentHTML}${actionsHTML}</div>`;
 
   div.innerHTML=`<div class="message-avatar">${avatarIcon}</div><div class="message-content">${headerHTML}${webBoxHTML}${bodyRowHTML}</div>`;
-  container.appendChild(div); scrollToBottom();
+  container.appendChild(div); scrollToBottom(); if(!empty) verifyLinksIn(div);
 }
 
 function getAgentLabel(){ 
@@ -3392,7 +3392,8 @@ function formatMessage(text){
   text=text.replace(/^- (.+)$/gm,'<div style="padding-left:16px;position:relative;"><span style="position:absolute;left:0;color:var(--accent-primary);">•</span>$1</div>');
   text=text.replace(/^\d+\. (.+)$/gm,'<div style="padding-left:16px;">$1</div>');
   text=text.replace(/^---$/gm,'<hr style="border:none;border-top:1px solid var(--border-color);margin:16px 0;"/>');
-  text=text.replace(/(https?:\/\/[^\s<>"']+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:var(--accent-secondary);text-decoration:underline;word-break:break-all;">$1</a>');
+  let __lk=0;
+  text=text.replace(/(https?:\/\/[^\s<>"']+)/g, (m)=>{ const id='lk'+(__lk++); return `<a class="vlink" id="${id}" href="${m}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-secondary);text-decoration:underline;word-break:break-all;">${m}<span class="vdot" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:5px;vertical-align:middle;background:var(--accent-orange);animation:spin .8s linear infinite;"></span></a>`; });
   text=text.replace(/\n/g,'<br>');
   return text;
 }
@@ -3489,6 +3490,27 @@ function saveAdvancedSettings(){
   state.settings.systemPrompt=document.getElementById('advSystemPrompt').value;
   state.settings.memoryContext=document.getElementById('advMemoryContext').value;
   localStorage.setItem('aiHub_settings',JSON.stringify(state.settings));showToast('Advanced settings saved','success');checkConnection().then(()=>loadModels());
+}
+
+// ===== LINK VERIFICATION =====
+async function checkLinkReachable(url){
+  const base = window.location.protocol.startsWith('http') ? window.location.origin : null;
+  if(base){ try{ const r=await fetch(`${base}/api/proxy?url=${encodeURIComponent(url)}`,{method:'GET',signal:AbortSignal.timeout(9000)}); if(r.ok){ return true; } }catch(_){} }
+  try{ const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,{signal:AbortSignal.timeout(9000)}); if(!r.ok) return false; const d=await r.json(); return !!(d.contents && d.contents.length>30); }catch(_){}
+  return false;
+}
+
+const __lkCache=new Map();
+async function verifyLinksIn(root){
+  if(!root) return;
+  for(const a of [...root.querySelectorAll('a.vlink')]){
+    const url=a.href; if(!url) continue;
+    const dot=a.querySelector('.vdot'); if(!dot) continue;
+    let ok=__lkCache.get(url);
+    if(ok===undefined){ ok=await checkLinkReachable(url); __lkCache.set(url,ok); }
+    if(ok){ dot.style.animation='none'; dot.style.background='var(--accent-green)'; dot.title='reachable'; a.title=url; }
+    else { dot.style.animation='none'; dot.style.background='var(--accent-red)'; dot.title='broken / unreachable'; a.style.textDecoration='line-through'; a.style.opacity='.55'; a.removeAttribute('href'); a.title=url+' (broken)'; }
+  }
 }
 
 // ===== TOAST (Outline Icons Only) =====

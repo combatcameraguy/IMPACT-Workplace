@@ -2412,16 +2412,6 @@ async function performLiveWebSearch(query) {
   return [];
 }
 
-  try {
-    const results = await raceDdg;
-    updateSearchStatus("Search complete.", true);
-    return results;
-  } catch (e) {
-    updateSearchStatus("Search complete.", true);
-    return [];
-  }
-}
-
 function toggleWebConnectivity() {
   if (!state.webScrapeEnabled) {
     showToast('Web connectivity is disabled in Advanced settings', 'info');

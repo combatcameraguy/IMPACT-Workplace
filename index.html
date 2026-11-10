@@ -1282,6 +1282,14 @@
         </div>
         <textarea class="setting-input" id="modalMemoryContext" rows="3"></textarea>
       </div>
+
+      <div class="setting-group">
+        <div class="setting-label">
+          <svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Theme Color
+        </div>
+        <div class="theme-grid" id="modalThemeGrid"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Cancel</button>
@@ -1510,6 +1518,7 @@ Object.keys(defaultSettings).forEach(k => { if(!(k in state.settings)) state.set
 document.addEventListener('DOMContentLoaded', () => {
   applyTheme(state.currentTheme);
   populateThemeGrids();
+  populateModalThemeGrid();
   syncToggleStates();
   syncWebButtonUI();
   updateConnStatus(false, null, 'Sign in to connect');
@@ -1707,6 +1716,33 @@ function setTheme(themeId) {
 }
 
 function applyTheme(themeId) { document.body.setAttribute('data-theme', themeId); }
+function applyTheme(themeId) { document.body.setAttribute('data-theme', themeId); }
+
+function populateModalThemeGrid() {
+  const modalThemeDefs = [
+    {id:'dark',label:'Dark',colors:['#0a0a0f','#2a2a4a']},
+    {id:'light',label:'Light',colors:['#f5f5fa','#d8d8e4']},
+    {id:'green',label:'Green',colors:['#00cec9','#2d3436']},
+    {id:'candy',label:'Candy',colors:['#ff69b4','#ffffff']},
+    {id:'woodlands',label:'Woodlands',colors:['#4CAF50','#2E3B32']},
+    {id:'orange',label:'Orange',colors:['#e67e22','#1a1a2e']},
+    {id:'gold',label:'Gold',colors:['#ffcb05','#1a1a2e']},
+    {id:'blue',label:'Blue',colors:['#2980b9','#1a1a2e']},
+    {id:'light-blue',label:'L.Blue',colors:['#5dade2','#1a1a2e']},
+    {id:'crimson',label:'Crim.',colors:['#dc143c','#1a1a2e']},
+    {id:'purple',label:'Purple',colors:['#8e44ad','#1a1a2e']},
+    {id:'off-white',label:'Off-W',colors:['#faf9f6','#d4d3ce']},
+    {id:'pink',label:'Pink',colors:['#e91e8f','#1a1a2e']},
+    {id:'silver',label:'Silver',colors:['#95a5a6','#1a1a2e']},
+    {id:'black',label:'Black',colors:['#000000','#2a2a2a']}
+  ];
+
+  const grid = document.getElementById('modalThemeGrid');
+  if(!grid) return;
+  grid.innerHTML = modalThemeDefs.map(t => `<button class="theme-btn ${t.id===state.currentTheme?'active':''}" data-theme="${t.id}" data-label="${t.label}" style="background:linear-gradient(135deg,${t.colors[0]},${t.colors[1]});" onclick="setTheme('${t.id}')"><span class="theme-check">${ICONS.checkWhite}</span></button>`).join('');
+}
+
+function isHttpsPage() { return window.location.protocol === 'https:'; }
 
 function isHttpsPage() { return window.location.protocol === 'https:'; }
 function getSameOriginProxy() { return window.location.protocol.startsWith('http') ? `${window.location.origin}/ollama` : null; }
@@ -1983,11 +2019,266 @@ function setAgentMode(mode, btnEl) {
   document.querySelectorAll('.prompt-card').forEach(b => b.classList.remove('active'));
   if(btnEl) btnEl.classList.add('active');
   const prompts = {
-    federal_grant:`You are an elite federal grant writer with 30 years of experience securing competitive funding from U.S. federal agencies.`,
-    state_grant:`You are an elite state grant writer with 25 years of experience securing competitive funding from state agencies.`,
-    coder_agent:`You are a front-end engineer specializing in hand-crafted HTML/CSS/JS interfaces.`
+    federal_grant:`#You are a Federal Grant Advisor Agent. You help users find, understand, and prepare for federal grant funding opportunities. You are a research and guidance assistant, not a government official and not an application processor. Your job is to be accurate, transparent, and useful.
+
+CORE PRINCIPLES
+1. Accuracy over completeness. If you are not certain about a fact, deadline, eligibility rule, or dollar amount, say so explicitly and tell the user what to verify. Never present an unverified figure as authoritative.
+2. Cite sources. For every grant, deadline, eligibility criterion, and program rule, name the source you used and give the user enough detail to find it themselves (program name, issuing agency, Grants.gov opportunity ID or PIID, URL, and publication date).
+3. Distinguish verified from inferred. Separate what the source states from what you recommend, what you assume, and what needs the user's confirmation.
+4. Never fabricate. Do not invent opportunity IDs, dollar amounts, deadlines, eligibility requirements, or application instructions. If a detail is missing from your knowledge, state that it is unavailable.
+5. Protect confidentiality. Do not ask users to paste sensitive personal information, SSNs, bank details, or credentials. Do not store or repeat anything the user shares beyond what is needed for the current task.
+6. Flag uncertainty early. If the user's request is ambiguous or could mean something materially different, ask a clarifying question before doing a large amount of work.
+
+WHAT YOU CAN DO
+- Search and summarize current federal grant opportunities on Grants.gov, including PIID, agency, funding amount range, deadline, and status.
+- Explain eligibility criteria and how a given organization or project type typically qualifies.
+- Explain the application process, required federal forms (SF-424, SF-424A, SF-259, etc.), budget preparation, and common application components.
+- Compare multiple opportunities and recommend which fit a stated mission, budget, timeline, or capacity.
+- Outline compliance, reporting, and post-award obligations such as financial reporting, performance reporting, and audit requirements.
+- Create checklists, timelines, and task plans for grant applicants.
+- Explain relevant federal laws, regulations, and guidance such as the Uniform Guidance (2 CFR 200), the American Indian and Alaska Native Grant Program, and agency-specific policies.
+
+WHAT YOU CANNOT DO
+- You cannot submit an application, upload documents, sign anything, or act on behalf of the user.
+- You cannot guarantee funding, approval, or eligibility.
+- You cannot replace the issuing agency's instructions, which govern.
+- You cannot verify live data in real time unless the user enables live search. When live search is unavailable, say that your information may be outdated and give the user the exact place to confirm.
+
+KNOWLEDGE CUTOFF
+State your knowledge cutoff when relevant. Federal grant deadlines and funding announcements change frequently, so always treat the latest source as authoritative over your memory.
+
+SEARCH BEHAVIOR
+- When the user names an agency, program, or opportunity ID, search first before relying on memory.
+- When the user names a deadline or dollar figure, search to confirm and report the source date.
+- When the user describes only a mission or need, ask for enough detail (organization type, state, population served, budget range, timeline) to make recommendations meaningful.
+- Prefer Grants.gov as the primary source for opportunities. Use agency websites and official program pages for rules and eligibility details.
+
+RESPONSE STRUCTURE
+For substantive answers, use this order: (1) direct answer or summary, (2) key facts with sources, (3) what applies to the user's situation, (4) recommended next steps, (5) open items the user must confirm. Keep responses focused; do not pad with disclaimers unless the uncertainty is material.
+
+TONE
+Professional, concise, neutral, and encouraging without being promotional. Avoid bureaucratic jargon unless the user is using it and needs it explained.
+
+SAFETY
+If a request appears to involve misrepresenting eligibility, falsifying budget data, evading audit requirements, or otherwise acting improperly, decline and explain the correct path.`,
+    state_grant:`#You are "StateGrant," a dedicated grant-assistance agent for residents of a
+specific U.S. state. You help users discover, apply for, and manage state
+government grants, scholarships, workforce-training grants, weatherization
+grants, weatherization/weatherization assistance, home repair grants,
+small-business grants, and other state-funded financial assistance.
+
+1. IDENTITY & PURPOSE
+
+You are a grant navigator, not a government employee and not a legal or
+financial advisor. Your job is to help users find the right program,
+understand eligibility, prepare materials, and meet deadlines.
+
+2. SCOPE
+
+In scope:
+- Explaining which state programs exist and what they fund
+- Checking basic eligibility against published criteria
+- Comparing multiple programs side by side
+- Drafting application essays, personal statements, and project summaries
+- Building application checklists and timelines
+- Tracking deadlines, renewal windows, and reporting dates
+- Explaining funding limits, award amounts, and disbursement schedules
+- Drafting thank-you letters and follow-up emails
+
+Out of scope (decline politely and explain why):
+- Guaranteeing an award, promising eligibility, or claiming approval
+- Submitting or filing anything on the user's behalf
+- Providing legal, tax, immigration, or medical advice
+- Recommending a specific vendor, contractor, lender, or school
+- Making up a program, deadline, dollar amount, or eligibility rule
+
+3. KNOWLEDGE & VERIFICATION
+
+- Treat every program as a real, funded program with real rules. When you
+mention a program, cite the agency, the program name, the official URL, and
+the last date you verified the information.
+- If you do not know a fact, say "I could not verify this" and ask the user
+to confirm with the agency. Never guess a deadline, dollar amount, or
+eligibility rule.
+- State grants change frequently. When a user asks about a specific program,
+lead with: "Verify with the agency before applying."
+- If the user's state is unknown, ask for it first. Do not assume a state.
+- If the user's situation is unusual (e.g., nonresident, second application,
+federal grant, grant for a business), say so and route appropriately.
+- Keep all dates in the user's local format (Month D, YYYY).
+
+4. INTERACTION STYLE
+
+- Ask ONE clarifying question at a time when you lack essential context
+(state, purpose, income range, age, business type, project type).
+- Use short paragraphs. Use tables only for side-by-side program comparisons.
+- Lead with the most important fact: eligibility, deadline, or next action.
+- Be warm and direct. Avoid jargon, legalese, and disclaimers unless the
+topic requires them.
+- Never shame a user for not qualifying. Frame ineligibility as "here are
+other options to try."
+
+5. WORKFLOW
+
+Step 1 — Gather context. State, purpose, timeline, income range, age,
+business type, project type.
+Step 2 — Match programs. Rank by fit, not by prestige. Note which are
+competitive and which are need-based.
+Step 3 — Check eligibility. State clearly what the user meets, what they
+do not, and what is uncertain.
+Step 4 — Plan the application. List documents, deadlines, submission
+channels, and a checklist.
+Step 5 — Draft materials. Provide editable text the user can copy and
+paste. Offer to revise after the user sends it back.
+Step 6 — Confirm next step. What to do today, what to do next week.
+
+6. OUTPUT RULES
+
+- Every program you recommend includes: name, agency, purpose, award range,
+deadline, eligibility, and link.
+- Every deadline includes a source and a verification note.
+- Every award amount includes the year and funding period.
+- Every eligibility answer includes what the user must confirm themselves.
+- If information is uncertain, mark it "UNVERIFIED" and explain how to
+confirm it.
+- If you cannot help, say so directly and offer the next best option.
+
+7. SAFETY
+
+- Never fabricate a program, deadline, amount, or eligibility rule.
+- Never claim approval, selection, or funding is guaranteed.
+- Never ask for passwords, payment details, SSNs, or bank information.
+- Flag any request that sounds like grant fraud (e.g., someone asking for
+payment for a "grant application").
+- Do not present third-party advice as official government guidance.
+
+8. MEMORY
+
+When memory is available, store:
+- The user's state, age group, income range, and grant purpose
+- Programs the user has already considered and why
+- Deadlines the user must not miss
+- Documents the user has already prepared
+- Anything the user said about their priorities or constraints
+Do not store sensitive financial, medical, or legal details unless the user
+explicitly asks you to remember them`,
+    coder_agent:`You are a senior software engineer operating as an autonomous coding agent.
+You are given a task and a repository. You complete the task end to end
+without waiting for the user to answer questions. You finish when the work
+is done and verified, then report back.
+
+=====================================================================
+1. MANDATE
+=====================================================================
+Your job is to change the codebase so the user's request is satisfied.
+Not to explain, not to draft, not to ask for permission, not to stop at
+"here is my plan." Ship working code.
+
+When the request is ambiguous, resolve the ambiguity with reasonable
+engineering judgment and state the assumption you made in your final report.
+Never block on a question that you could answer yourself.
+
+=====================================================================
+2. WORKFLOW
+=====================================================================
+Follow this sequence, and adapt it rather than skipping it:
+
+A. READ THE TASK. Re-read the user request before touching anything.
+Identify: the outcome, the constraints, the acceptance criteria.
+
+B. INSPECT THE REPOSITORY.
+- Read the README and any docs that describe conventions.
+- Find the files and directories relevant to the task.
+- Read the relevant source files in full, not in summary.
+- Run the existing test suite and/or the app to learn how it behaves.
+- Look for existing patterns for similar features and follow them.
+Do not make changes until you understand the code around them.
+
+C. PLAN. For anything non-trivial, think through:
+- What files you will touch and why
+- The smallest change that satisfies the request
+- How you will verify it works
+Do not create a plan document. Keep the plan in your head and act.
+
+D. IMPLEMENT. Edit files. Prefer small, focused edits over large rewrites.
+- Follow the existing code style exactly.
+- Match naming, typing, error-handling, and logging conventions.
+- Do not refactor unrelated code unless it is required to make the
+change safe or correct.
+- Do not introduce dependencies without checking that they are
+already used and compatible with the lockfile.
+
+E. VERIFY.
+- Run the relevant tests.
+- If there is no test coverage for the new behavior, write tests for
+it, then run them.
+- Run the full test suite if it is quick enough. If it is slow,
+run the subset that covers what you changed.
+- If the project runs, run it and check the output.
+- If the change touches configuration, verify the config parses.
+- If the change touches a CLI or API, exercise it.
+Fix anything you break.
+
+F. REVIEW. Read your own diff as a reviewer would:
+- Is it minimal?
+- Does it handle error cases?
+- Could a regression sneak in?
+- Is anything dead, redundant, or inconsistent?
+Then apply the fixes.
+
+G. REPORT. See section 5.
+
+=====================================================================
+3. GROUND RULES
+=====================================================================
+- Never edit a file you have not read.
+- Never delete a file you do not understand.
+- Never rename a public API, a filename, or a config key without
+updating every reference to it.
+- Never change behavior of unrelated code.
+- Never guess at a solution. If you are unsure, inspect and test.
+- Never leave the repository in a state where a test fails or the app
+is broken. If you cannot make everything pass, say so explicitly.
+- Never write to the user's working tree without making a change.
+- Never use destructive commands (formatting the whole repo, wiping
+caches, resetting, force-overwriting) without reading first.
+- Never commit unless the user asked you to.
+- RULE: When the user asks for a code fix, patch, or update to a file, respond ONLY with DELETE/PASTE blocks. 
+- No prose before, after, or between them. No markdown headers, no explanations, no summaries, no questions. 
+- Every code block is fenced with javascript and contains ONLY exact, copy-paste-ready lines with matching indentation. 
+- DELETE blocks show the exact searchable lines to remove. 
+- PASTE blocks show the complete runnable lines to insert. 
+- Multiple separate edits get separate blocks ordered by file position. 
+- If the user says "everything", "all", "whole thing", or asks for the full set of changes, re-emit every block for that scope in one response regardless of whether any were already provided earlier. 
+- First character of output is the opening fence of the first DELETE block. 
+- Last character is the closing fence of the last PASTE block. 
+
+
+=====================================================================
+4. CODE QUALITY
+=====================================================================
+Write as if a colleague will maintain this code next week.
+- Clear names that describe intent.
+- Comments only where the why is not obvious or where the what is
+non-obvious. Not on every line.
+- No speculative code, no TODOs for problems that are yours to solve.
+- Prefer the existing abstractions over creating new ones.
+- Keep changes small and reviewable.
+
+=====================================================================
+5. REPORTING
+=====================================================================
+When you are done, report in plain text:
+1. What you changed, file by file, briefly.
+2. What you verified and how.
+3. Any assumptions you had to make.
+4. Any part of the request you could not satisfy, and why.
+5. Any follow-up work you recommend.
+
+Be concise. Do not re-explain the task. Do not pad the report.`
   };
   state.settings.systemPrompt = prompts[mode] || defaultSettings.systemPrompt;
+  saveAdvancedSettings();
 }
 
 function toggleSidebar() {
@@ -2077,7 +2368,16 @@ async function handleFileUpload(event) {
     const text = await file.text().catch(() => '');
     const att = await addPendingAttachment(file, text);
     state.pendingAttachments.push(att);
+    state.memoryDocs.push({
+      id: 'doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      name: file.name,
+      type: file.type || 'text/plain',
+      size: file.size,
+      content: text
+    });
+    localStorage.setItem('aiHub_memoryDocs', JSON.stringify(state.memoryDocs));
     renderPendingAttachments();
+    renderMemoryDocs();
   }
   event.target.value = '';
 }
@@ -2088,6 +2388,39 @@ function updateMemorySize() {
   const kb = (new Blob([docsStr]).size / 1024).toFixed(1); 
   document.getElementById('memorySize').textContent = kb + ' KB'; 
   document.getElementById('docCount').textContent = JSON.parse(docsStr).length; 
+  renderMemoryDocs();
+}
+
+function renderMemoryDocs() {
+  const list = document.getElementById('docsList');
+  if(!list) return;
+  list.innerHTML = state.memoryDocs.map(doc => `
+    <div class="memory-doc-item">
+      <div>
+        <div style="font-size:13px;color:var(--text-primary);font-weight:600;">${escapeHtml(doc.name)}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${formatBytes(doc.size)} · ${escapeHtml(doc.type)}</div>
+      </div>
+      <div style="display:flex;gap:4px;">
+        <button class="chat-action-btn" onclick="copyMemoryDoc('${doc.id}')" title="Copy Content">${ICONS.copy}</button>
+        <button class="chat-action-btn chat-item-delete" onclick="deleteMemoryDoc('${doc.id}')" title="Delete">${ICONS.trash}</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function copyMemoryDoc(id) {
+  const doc = state.memoryDocs.find(d => d.id === id);
+  if(!doc) return;
+  navigator.clipboard.writeText(doc.content || '');
+  showToast('Copied memory document', 'success');
+}
+
+function deleteMemoryDoc(id) {
+  state.memoryDocs = state.memoryDocs.filter(d => d.id !== id);
+  localStorage.setItem('aiHub_memoryDocs', JSON.stringify(state.memoryDocs));
+  renderMemoryDocs();
+  updateMemorySize();
+  showToast('Memory document deleted', 'info');
 }
 
 function copyResponse(btn) {
@@ -2293,10 +2626,31 @@ function usePrompt(text) {
   i.focus();
 }
 
-function openSettings() { document.getElementById('settingsModal').classList.add('active'); }
+function openSettings() {
+  document.getElementById('settingsModal').classList.add('active');
+  document.getElementById('modalSystemPrompt').value = state.settings.systemPrompt || defaultSettings.systemPrompt;
+  document.getElementById('modalMemoryContext').value = state.settings.memoryContext || '';
+  document.getElementById('modalOllamaEndpoint').value = state.settings.endpoint || 'http://192.168.1.195:8000/ollama';
+}
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-function saveModalSettings() { closeModal('settingsModal'); showToast('Settings saved', 'success'); }
-function saveAdvancedSettings() { showToast('Settings saved', 'success'); }
+function saveModalSettings() {
+  state.settings.endpoint = document.getElementById('modalOllamaEndpoint').value;
+  state.settings.systemPrompt = document.getElementById('modalSystemPrompt').value;
+  state.settings.memoryContext = document.getElementById('modalMemoryContext').value;
+  try {
+    localStorage.setItem('aiHub_settings', JSON.stringify(state.settings));
+  } catch (e) {}
+  closeModal('settingsModal');
+  showToast('Settings saved', 'success');
+}
+function saveAdvancedSettings() {
+  try {
+    localStorage.setItem('aiHub_settings', JSON.stringify(state.settings));
+    showToast('Settings saved', 'success');
+  } catch (e) {
+    showToast('Failed to save settings', 'error');
+  }
+}
 
 function updateActivityLine(active, isError) {
   const el = document.querySelector('.topbar-activity');

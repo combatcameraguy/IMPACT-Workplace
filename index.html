@@ -635,15 +635,57 @@
     background: var(--bg-secondary); 
   }
 
-  .topbar { position: relative; }
+  .topbar { position: relative; overflow: hidden; }
+  
   .topbar-activity {
-    position:absolute; bottom:-1px; left:0; right:0; height:2px; z-index:60;
-    background:var(--accent-primary); opacity:0; transform:scaleX(0); transform-origin:left;
-    transition:transform .6s ease, opacity .3s; pointer-events:none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 60;
+    background: transparent;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
   }
-  .topbar-activity.active { opacity:1; animation:activityScan 1.5s ease-in-out infinite alternate; }
-  .topbar-activity.error { opacity:1; background:var(--accent-red); animation:none; transform:scaleX(1); }
-  @keyframes activityScan { from{transform:scaleX(0);} to{transform:scaleX(1);} }
+
+  /* Sweeping glowing segment while streaming */
+  .topbar-activity.active {
+    opacity: 1;
+  }
+  
+  .topbar-activity.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 35%; /* Length of the sweeping highlight */
+    background: var(--accent-primary);
+    box-shadow: 0 0 10px var(--accent-primary);
+    animation: activitySweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  /* Disconnect / Error state: solid red full width */
+  .topbar-activity.error {
+    opacity: 1;
+    background: var(--accent-red);
+    box-shadow: 0 0 10px var(--accent-red);
+  }
+  
+  .topbar-activity.error::after {
+    display: none;
+  }
+
+  @keyframes activitySweep {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(380%);
+    }
+  }
 
   .toggle-sidebar-btn { width: 36px; height: 36px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
   .toggle-sidebar-btn:hover { background: var(--bg-input); color: var(--text-primary); }

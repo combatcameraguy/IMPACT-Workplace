@@ -959,7 +959,7 @@
     }
   }
 
-  /* Copy & Edit Message Action Buttons Next to Text Window */
+   /* Copy & Edit Message Action Buttons Next to Text Window */
   .message-body-row {
     display: flex;
     flex-direction: column;
@@ -1594,6 +1594,77 @@
 
 <!-- SheetJS (xlsx) from CDN -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<script>
+function editMessage(btn) {
+  const messageContent = btn.closest('.message-content');
+  const messageTextEl = messageContent.querySelector('.message-text');
+  const messageActions = messageContent.querySelector('.message-actions');
+
+  // Save the original formatted HTML so we can restore it if canceled
+  if (!messageTextEl.dataset.originalHtml) {
+    messageTextEl.dataset.originalHtml = messageTextEl.innerHTML;
+  }
+
+  const rawText = decodeURIComponent(messageTextEl.dataset.rawContent || '');
+  messageActions.style.display = 'none';
+
+  messageTextEl.innerHTML = `
+    <textarea class="inline-edit-box"></textarea>
+    <div class="inline-edit-actions">
+      <button class="inline-edit-btn" onclick="cancelEdit(this)">Cancel</button>
+      <button class="inline-edit-btn submit" onclick="submitEdit(this)">Resubmit</button>
+    </div>
+  `;
+
+  const textarea = messageTextEl.querySelector('textarea');
+  textarea.value = rawText;
+  textarea.style.height = 'auto';
+  textarea.style.height = (textarea.scrollHeight) + 'px';
+  textarea.focus();
+}
+
+function cancelEdit(btn) {
+  const messageContent = btn.closest('.message-content');
+  const messageTextEl = messageContent.querySelector('.message-text');
+  const messageActions = messageContent.querySelector('.message-actions');
+
+  messageTextEl.innerHTML = messageTextEl.dataset.originalHtml;
+  messageActions.style.display = 'flex';
+}
+
+function submitEdit(btn) {
+  const messageDiv = btn.closest('.message');
+  const textarea = messageDiv.querySelector('textarea');
+  const newText = textarea.value.trim();
+
+  if (!newText) return;
+
+  // Clear this message and all subsequent messages from the DOM
+  let nextSib = messageDiv.nextElementSibling;
+  while (nextSib) {
+    let toRemove = nextSib;
+    nextSib = nextSib.nextElementSibling;
+    toRemove.remove();
+  }
+  messageDiv.remove();
+
+  // Truncate the chat history array in state to match the remaining DOM nodes
+  const chat = state.conversations[state.currentChatId];
+  if (chat) {
+    const remainingDOM = document.querySelectorAll('#messagesContainer .message');
+    chat.messages = chat.messages.slice(0, remainingDOM.length);
+    saveConversations();
+  }
+
+  // Populate the main input and trigger send
+  const input = document.getElementById('userInput');
+  input.value = newText;
+  sendMessage();
+}
+
+// Intercept all fetch calls targeting our local backend and attach the Firebase token
+const originalFetch = window.fetch;
 
 <script>
 // Intercept all fetch calls targeting our local backend and attach the Firebase token
@@ -2574,12 +2645,21 @@ function appendMessageToUI(role, content, empty = false, msgId = null) {
   if(msgId) div.dataset.msgId = msgId;
   const avatarIcon = role === 'user' ? ICONS.user : ICONS.bot;
   
+  // Inject the edit button only for the user's side
+  const editBtnHtml = role === 'user' 
+    ? `<button class="edit-query-btn" onclick="editMessage(this)" title="Edit & Resubmit">${ICONS.edit}</button>` 
+    : '';
+    
+  // Safely encode content to avoid quote breaks in the HTML attribute
+  const safeRawContent = encodeURIComponent(content || '');
+
   div.innerHTML = `
     <div class="message-avatar">${avatarIcon}</div>
     <div class="message-content">
       <div class="message-body-row">
-        <div class="message-text">${empty ? '' : formatMessage(content)}</div>
+        <div class="message-text" data-raw-content="${safeRawContent}">${empty ? '' : formatMessage(content)}</div>
         <div class="message-actions">
+          ${editBtnHtml}
           <button class="copy-response-btn" onclick="copyResponse(this)" title="Copy Text">${copySvgIcon}</button>
         </div>
       </div>

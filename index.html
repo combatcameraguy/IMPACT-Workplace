@@ -2485,7 +2485,7 @@ async function performLiveWebSearch(query) {
         if (d.text && d.text.length > 30) {
           updateSearchStatus("Search complete.", true);
           return [{
-            title: `Tavily: ${cleanQuery}`,
+            title: `Asherah: ${cleanQuery}`,
             url: `${base}/api/proxy?q=${encodeURIComponent(cleanQuery)}`,
             snippet: d.text.substring(0, 2000)
           }];

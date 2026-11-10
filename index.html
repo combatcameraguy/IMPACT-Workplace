@@ -2364,40 +2364,53 @@ function cleanHtmlToText(rawHtml) {
   return (title ? `Title: ${title}\n` : '') + text.substring(0, 12000);
 }
 
+function proxyBase() {
+  return window.location.protocol.startsWith('http') ? window.location.origin : null;
+}
+
 async function scrapeWebPage(url) {
+  const base = proxyBase();
+  if (!base) return { ok: false, error: 'Local server required for Tavily extraction' };
+  
   try {
-    // Use a public CORS proxy to fetch the raw HTML
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
-    
+    // Routes to server.py -> tavily_extract
+    const res = await fetch(`${base}/api/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(25000) });
     if (res.ok) {
       const data = await res.json();
-      if (data.contents) {
-        // Use your existing HTML cleaner function
-        const cleanText = cleanHtmlToText(data.contents);
-        if (cleanText.length > 30) {
-          return { ok: true, text: cleanText };
-        }
-      }
+      if (data.text) return { ok: true, text: data.text };
     }
   } catch (err) {
-    console.error("Scraping failed:", err);
+    console.error("Tavily extract failed:", err);
   }
-  return { ok: false, error: 'Failed to scrape webpage' };
+  return { ok: false, error: 'Failed to extract webpage via Tavily' };
 }
 
 async function performLiveWebSearch(query) {
   const cleanQuery = query.replace(/[^\w\s?.-]/g, ' ').trim();
   if (!cleanQuery) return [];
-  updateSearchStatus(`Searching for "${cleanQuery.substring(0, 30)}"...`);
+  updateSearchStatus(`Searching Tavily for "${cleanQuery.substring(0, 30)}"...`);
+  
+  const base = proxyBase();
+  if (!base) {
+    updateSearchStatus("Search failed: Local server required.", true);
+    return [];
+  }
 
-  const raceDdg = (async () => {
-    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(cleanQuery)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) throw new Error('ddg');
-    const ddg = await res.json();
-    if (!ddg.AbstractText) throw new Error('ddg empty');
-    return [{ title: ddg.Heading || 'DuckDuckGo', url: ddg.AbstractURL || 'https://duckduckgo.com', snippet: ddg.AbstractText }];
-  })();
+  try {
+    // Routes to server.py -> tavily_search
+    const res = await fetch(`${base}/api/proxy?q=${encodeURIComponent(cleanQuery)}`, { signal: AbortSignal.timeout(15000) });
+    if (res.ok) {
+      const data = await res.json();
+      updateSearchStatus("Search complete.", true);
+      return data.results || [];
+    }
+  } catch (e) {
+    console.error("Tavily search error:", e);
+  }
+  
+  updateSearchStatus("Search complete.", true);
+  return [];
+}
 
   try {
     const results = await raceDdg;

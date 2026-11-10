@@ -1865,7 +1865,7 @@ function loadChat(id) {
   document.getElementById('welcomeScreen').style.display = 'none';
   if(chat.agentMode) setAgentMode(chat.agentMode, null);
   chat.messages.forEach(msg => {
-    appendMessageToUI(msg.role, msg.content, false, null, msg.sources);
+    appendMessageToUI(msg.role, msg.content, false, null);
   });
   renderChatList(); 
   scrollToBottom();
@@ -2203,7 +2203,7 @@ async function sendMessage() {
     if (searchSources.length > 0) {
       msgEl.insertAdjacentHTML('beforeend', renderSourcesHTML(searchSources));
     }
-    chat.messages.push({ role: 'assistant', content: fullContent, ...(searchSources.length > 0 ? { sources: searchSources } : {}) });
+    chat.messages.push({ role: 'assistant', content: fullContent });
     saveConversations();
   } catch(err) {
     updateActivityLine(false, err.name !== 'AbortError');
@@ -2220,7 +2220,7 @@ function appendMessageWithAttachments(role, content, attachments) {
   appendMessageToUI(role, content, false);
 }
 
-function appendMessageToUI(role, content, empty = false, msgId = null, sources = null) {
+function appendMessageToUI(role, content, empty = false, msgId = null) {
   const container = document.getElementById('messagesContainer'); 
   const div = document.createElement('div'); 
   div.className = `message ${role}`; 
@@ -2232,13 +2232,12 @@ function appendMessageToUI(role, content, empty = false, msgId = null, sources =
     : '';
     
   const safeRawContent = encodeURIComponent(content || '');
-  const sourcesHtml = (sources && sources.length > 0) ? renderSourcesHTML(sources) : '';
 
   div.innerHTML = `
     <div class="message-avatar">${avatarIcon}</div>
     <div class="message-content">
       <div class="message-body-row">
-        <div class="message-text" data-raw-content="${safeRawContent}">${empty ? '' : formatMessage(content)}${sourcesHtml}</div>
+        <div class="message-text" data-raw-content="${safeRawContent}">${empty ? '' : formatMessage(content)}</div>
         <div class="message-actions">
           ${editBtnHtml}
           <button class="copy-response-btn" onclick="copyResponse(this)" title="Copy Text">${copySvgIcon}</button>

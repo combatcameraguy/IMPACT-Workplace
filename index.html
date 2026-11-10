@@ -1209,7 +1209,7 @@
       </div>
 
       <input type="file" id="photoFileInput" class="hidden-input" accept="image/*" multiple onchange="handlePhotoUpload(event)">
-      <input type="file" id="fileInputMain" class="hidden-input" accept=".txt,.md,.json,.csv,.py,.js,.html,.css,.xml,.log,.pdf,.xlsx,.xls" multiple onchange="handleFileUpload(event)">
+      <input type="file" id="fileInputMain" class="hidden-input" accept=".txt,.md,.json,.csv,.py,.js,.ts,.jsx,.tsx,.html,.css,.xml,.yaml,.yml,.sh,.sql,.log,.pdf,.xlsx,.xls,.docx,.doc,.rtf" multiple onchange="handleFileUpload(event)">
 
       <div class="input-box-wrapper">
         <label class="voice-kb-btn" id="voiceKbBtn" for="userInput"
@@ -1318,9 +1318,9 @@
           <svg class="ico ico-xl" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         </div>
         <div class="drop-zone-text">Drop files here or click to upload</div>
-        <div class="drop-zone-hint">Supports PDF, images, TXT, MD, CSV, JSON, LOG</div>
+        <div class="drop-zone-hint">Supports PDF, DOCX, DOC, XLSX, XLS, HTML, JSON, PY, TXT, MD, CSV, Images (Max 10 stored)</div>
       </div>
-      <input type="file" id="fileInput" multiple hidden accept=".txt,.md,.json,.csv,.py,.js,.html,.css,.xml,.log,.pdf,.xlsx,.xls,image/*" onchange="handleFileUpload(event)">
+      <input type="file" id="fileInput" multiple hidden accept=".txt,.md,.json,.csv,.py,.js,.ts,.jsx,.tsx,.html,.css,.xml,.yaml,.yml,.sh,.sql,.log,.pdf,.xlsx,.xls,.docx,.doc,.rtf,image/*" onchange="handleFileUpload(event)">
 
       <div class="setting-group" style="margin-top:20px;">
         <div class="setting-label">Stored Knowledge Documents</div>
@@ -1360,6 +1360,7 @@
 <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 
 <script>
 // ===== INLINE EDIT & RESUBMIT =====
@@ -2322,13 +2323,219 @@ function formatBytes(b) {
   return parseFloat((b / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-function addPendingAttachment(file, extractedText) {
-  const id = 'att_' + Date.now();
-  const entry = { id, name: file.name, type: file.type || 'text/plain', size: file.size, extractedText: extractedText || null };
+const MAX_MEMORY_DOCS = 10;
+
+async function extractTextFromPDF(file) {
+  if (!window.pdfjsLib) throw new Error('PDF.js library not loaded');
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = '';
+
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const textContent = await page.getTextContent();
+    let pageText = textContent.items.map(item => item.str).join(' ').trim();
+
+    if (pageText.length < 25 && state.pdfOcrEnabled && window.Tesseract) {
+      try {
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const ocrRes = await Tesseract.recognize(canvas, 'eng');
+        if (ocrRes?.data?.text) pageText = ocrRes.data.text.trim();
+      } catch (ocrErr) {
+        console.warn(`PDF page ${pageNum} OCR fallback error:`, ocrErr);
+      }
+    }
+    fullText += `--- Page ${pageNum} ---\n${pageText}\n\n`;
+  }
+  return fullText.trim() || '[PDF contained no extractable text]';
+}
+
+async function extractTextFromExcel(file) {
+  if (!window.XLSX) throw new Error('SheetJS (XLSX) library not loaded');
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  let result = '';
+  workbook.SheetNames.forEach(sheetName => {
+    const sheet = workbook.Sheets[sheetName];
+    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+    if (csv && csv.trim()) {
+      result += `--- Sheet: ${sheetName} ---\n${csv.trim()}\n\n`;
+    }
+  });
+  return result.trim() || '[Spreadsheet is empty]';
+}
+
+async function extractTextFromDocx(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+
+  if (ext === 'docx' && window.mammoth) {
+    try {
+      const res = await mammoth.extractRawText({ arrayBuffer });
+      if (res && res.value && res.value.trim()) return res.value.trim();
+    } catch (e) {
+      console.warn('Mammoth DOCX parse failed, using fallback:', e);
+    }
+  }
+
+  const uint8 = new Uint8Array(arrayBuffer);
+  const rawLatin = new TextDecoder('latin1').decode(uint8);
+  const xmlStripped = rawLatin.replace(/<[^>]+>/g, ' ');
+  const blocks = xmlStripped.match(/[\x20-\x7E\r\n\t]{5,}/g) || [];
+  const cleaned = blocks.join('\n').replace(/\s{3,}/g, ' ').trim();
+  return cleaned || '[Word document contained no extractable text]';
+}
+
+async function extractTextFromImage(file) {
+  let resultParts = [];
+  if (state.pdfOcrEnabled && window.Tesseract) {
+    try {
+      const ocrRes = await Tesseract.recognize(file, 'eng');
+      const ocrText = (ocrRes?.data?.text || '').trim();
+      if (ocrText) resultParts.push(`[Image OCR Text]:\n${ocrText}`);
+    } catch (e) {
+      console.warn('Image OCR error:', e);
+    }
+  }
+
+  if (state.visionEnabled) {
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(getActiveOllamaBase() + '/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: getCurrentModel(),
+          prompt: 'Describe this image in detail and transcribe any visible text or data.',
+          images: [base64],
+          stream: false
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.response) resultParts.push(`[Visual Description]:\n${data.response.trim()}`);
+      }
+    } catch (e) {
+      console.warn('Vision captioning error:', e);
+    }
+  }
+
+  return resultParts.join('\n\n') || `[Image attached: ${file.name}]`;
+}
+
+async function extractFileContent(file) {
+  const name = file.name || '';
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const type = (file.type || '').toLowerCase();
+
+  try {
+    if (ext === 'pdf' || type === 'application/pdf') {
+      return await extractTextFromPDF(file);
+    }
+    if (['xlsx', 'xls', 'ods'].includes(ext) || type.includes('spreadsheet') || type.includes('excel')) {
+      return await extractTextFromExcel(file);
+    }
+    if (['docx', 'doc', 'rtf'].includes(ext) || type.includes('word')) {
+      return await extractTextFromDocx(file);
+    }
+    if (type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].includes(ext)) {
+      return await extractTextFromImage(file);
+    }
+    if (ext === 'json' || type === 'application/json') {
+      const raw = await file.text();
+      try {
+        return JSON.stringify(JSON.parse(raw), null, 2);
+      } catch {
+        return raw;
+      }
+    }
+    if (['html', 'htm'].includes(ext) || type === 'text/html') {
+      const raw = await file.text();
+      const doc = new DOMParser().parseFromString(raw, 'text/html');
+      const bodyText = (doc.body?.innerText || '').trim();
+      return `[HTML Source]:\n${raw}\n\n[Rendered Text]:\n${bodyText}`;
+    }
+    return await file.text();
+  } catch (err) {
+    console.error(`Error extracting ${name}:`, err);
+    try {
+      return await file.text();
+    } catch {
+      return `[Failed to extract content from ${name}: ${err.message}]`;
+    }
+  }
+}
+
+function saveMemoryDocsToStorage() {
+  try {
+    localStorage.setItem('aiHub_memoryDocs', JSON.stringify(state.memoryDocs));
+  } catch (e) {
+    showToast('Storage quota reached: trimming large document content', 'error');
+    state.memoryDocs.forEach(d => {
+      if (d.content && d.content.length > 50000) {
+        d.content = d.content.substring(0, 50000) + '\n...[Truncated for localStorage limit]';
+      }
+    });
+    try { localStorage.setItem('aiHub_memoryDocs', JSON.stringify(state.memoryDocs)); } catch (_) {}
+  }
+}
+
+function storeDocumentInMemory(file, extractedText) {
+  if (!extractedText) return null;
+
+  const existingIdx = state.memoryDocs.findIndex(d => d.name === file.name);
+  const docEntry = {
+    id: existingIdx >= 0 ? state.memoryDocs[existingIdx].id : ('doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000)),
+    name: file.name,
+    type: file.type || (file.name.split('.').pop() || 'text/plain'),
+    size: file.size,
+    content: extractedText,
+    enabled: true,
+    uploadedAt: new Date().toISOString()
+  };
+
+  if (existingIdx >= 0) {
+    state.memoryDocs[existingIdx] = docEntry;
+  } else {
+    if (state.memoryDocs.length >= MAX_MEMORY_DOCS) {
+      const removed = state.memoryDocs.shift();
+      showToast(`Max ${MAX_MEMORY_DOCS} docs reached. Replaced oldest: ${removed.name}`, 'info');
+    }
+    state.memoryDocs.push(docEntry);
+  }
+
+  saveMemoryDocsToStorage();
+  updateMemorySize();
+  return docEntry;
+}
+
+function addPendingAttachment(file, extractedText, docId = null) {
+  const id = 'att_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+  const entry = {
+    id,
+    docId,
+    name: file.name,
+    type: file.type || (file.name.split('.').pop() || 'text/plain'),
+    size: file.size,
+    extractedText: extractedText || ''
+  };
   return Promise.resolve(entry);
 }
 
-function removePendingAttachment(id) { state.pendingAttachments = state.pendingAttachments.filter(a => a.id !== id); renderPendingAttachments(); }
+function removePendingAttachment(id) {
+  state.pendingAttachments = state.pendingAttachments.filter(a => a.id !== id);
+  renderPendingAttachments();
+}
 
 function renderPendingAttachments() {
   let existingBar = document.getElementById('pendingAttachmentBar');
@@ -2339,88 +2546,158 @@ function renderPendingAttachments() {
     existingBar.style.cssText = 'margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;padding-left:4px;align-items:center;';
     wrapper.insertBefore(existingBar, document.getElementById('sendBtn').parentElement);
   }
-  if (state.pendingAttachments.length === 0) { existingBar.innerHTML = ''; return; }
-  existingBar.innerHTML = state.pendingAttachments.map(att => `
-    <div class="att-wrapper" style="position:relative;display:inline-flex;">
-      <div class="file-attachment-card"><span class="att-icon">${getFileIcon(att.type)}</span><div class="att-info"><div class="att-name">${escapeHtml(att.name)}</div><div class="att-meta">${formatBytes(att.size)}</div></div></div>
-      <button class="att-remove" onclick="removePendingAttachment('${att.id}')">${ICONS.close}</button>
-    </div>
-  `).join('');
+  if (state.pendingAttachments.length === 0) {
+    existingBar.innerHTML = '';
+    return;
+  }
+  existingBar.innerHTML = state.pendingAttachments.map(att => {
+    const charCount = att.extractedText ? att.extractedText.length : 0;
+    const statusLabel = charCount > 0 ? `${formatBytes(att.size)} · ${(charCount / 1000).toFixed(1)}k chars` : formatBytes(att.size);
+    return `
+      <div class="att-wrapper" style="position:relative;display:inline-flex;">
+        <div class="file-attachment-card" title="${escapeHtml(att.name)} (${charCount} chars extracted)">
+          <span class="att-icon">${getFileIcon(att.type)}</span>
+          <div class="att-info">
+            <div class="att-name">${escapeHtml(att.name)}</div>
+            <div class="att-meta">${statusLabel}</div>
+          </div>
+        </div>
+        <button class="att-remove" onclick="removePendingAttachment('${att.id}')">${ICONS.close}</button>
+      </div>
+    `;
+  }).join('');
 }
 
-function triggerPhotoUpload() { document.getElementById('photoFileInput').click(); }
+async function handleFiles(fileList, attachToChat = true) {
+  if (!fileList || fileList.length === 0) return;
+  const files = Array.from(fileList);
+
+  if (files.length > MAX_MEMORY_DOCS) {
+    showToast(`Uploading first ${MAX_MEMORY_DOCS} files (maximum limit is ${MAX_MEMORY_DOCS})`, 'info');
+  }
+  const slice = files.slice(0, MAX_MEMORY_DOCS);
+
+  updateActivityLine(true);
+  for (const file of slice) {
+    const isImage = (file.type || '').startsWith('image/');
+    if (isImage && !state.photoEnabled) {
+      showToast('Photo upload is disabled in Advanced settings', 'error');
+      continue;
+    }
+    if (!isImage && !state.fileEnabled) {
+      showToast('File upload is disabled in Advanced settings', 'error');
+      continue;
+    }
+
+    showToast(`Scanning ${file.name}...`, 'info');
+    const extractedText = await extractFileContent(file);
+    const savedDoc = storeDocumentInMemory(file, extractedText);
+
+    if (attachToChat) {
+      const att = await addPendingAttachment(file, extractedText, savedDoc?.id);
+      state.pendingAttachments.push(att);
+      renderPendingAttachments();
+    }
+    showToast(`Saved & indexed "${file.name}"`, 'success');
+  }
+  updateActivityLine(false);
+}
+
+function triggerPhotoUpload() {
+  if (!state.photoEnabled) {
+    showToast('Photo upload is disabled in Advanced settings', 'info');
+    return;
+  }
+  document.getElementById('photoFileInput').click();
+}
+
 async function handlePhotoUpload(event) {
-  const files = event.target.files;
-  if (!files) return;
-  for (let file of files) {
-    const att = await addPendingAttachment(file, null);
-    state.pendingAttachments.push(att);
-    renderPendingAttachments();
-  }
+  await handleFiles(event.target.files, true);
   event.target.value = '';
 }
 
-function triggerFileUpload() { document.getElementById('fileInputMain').click(); }
+function triggerFileUpload() {
+  if (!state.fileEnabled) {
+    showToast('File upload is disabled in Advanced settings', 'info');
+    return;
+  }
+  document.getElementById('fileInputMain').click();
+}
+
 async function handleFileUpload(event) {
-  const files = event.target.files;
-  if (!files) return;
-  for (let file of files) {
-    const text = await file.text().catch(() => '');
-    const att = await addPendingAttachment(file, text);
-    state.pendingAttachments.push(att);
-    state.memoryDocs.push({
-      id: 'doc_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-      name: file.name,
-      type: file.type || 'text/plain',
-      size: file.size,
-      content: text
-    });
-    localStorage.setItem('aiHub_memoryDocs', JSON.stringify(state.memoryDocs));
-    renderPendingAttachments();
-    renderMemoryDocs();
-  }
+  const fromModal = event.target.id === 'fileInput';
+  await handleFiles(event.target.files, !fromModal);
   event.target.value = '';
 }
 
-function openMemoryManager() { document.getElementById('memoryModal').classList.add('active'); updateMemorySize(); }
-function updateMemorySize() { 
-  const docsStr = localStorage.getItem('aiHub_memoryDocs') || '[]'; 
-  const kb = (new Blob([docsStr]).size / 1024).toFixed(1); 
-  document.getElementById('memorySize').textContent = kb + ' KB'; 
-  document.getElementById('docCount').textContent = JSON.parse(docsStr).length; 
+function openMemoryManager() {
+  document.getElementById('memoryModal').classList.add('active');
+  updateMemorySize();
+}
+
+function updateMemorySize() {
+  const docsStr = JSON.stringify(state.memoryDocs || []);
+  const kb = (new Blob([docsStr]).size / 1024).toFixed(1);
+  const activeCount = state.memoryDocs.filter(d => d.enabled !== false).length;
+  const memSizeEl = document.getElementById('memorySize');
+  const docCountEl = document.getElementById('docCount');
+  if (memSizeEl) memSizeEl.textContent = kb + ' KB';
+  if (docCountEl) docCountEl.textContent = `${activeCount} active / ${state.memoryDocs.length} (${MAX_MEMORY_DOCS} max)`;
   renderMemoryDocs();
+}
+
+function toggleMemoryDoc(id) {
+  const doc = state.memoryDocs.find(d => d.id === id);
+  if (!doc) return;
+  doc.enabled = doc.enabled === false ? true : false;
+  saveMemoryDocsToStorage();
+  updateMemorySize();
+  showToast(`"${doc.name}" ${doc.enabled ? 'enabled for chat context' : 'muted from chat context'}`, 'info');
 }
 
 function renderMemoryDocs() {
   const list = document.getElementById('docsList');
-  if(!list) return;
-  list.innerHTML = state.memoryDocs.map(doc => `
-    <div class="memory-doc-item">
-      <div>
-        <div style="font-size:13px;color:var(--text-primary);font-weight:600;">${escapeHtml(doc.name)}</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${formatBytes(doc.size)} · ${escapeHtml(doc.type)}</div>
+  if (!list) return;
+  if (!state.memoryDocs || state.memoryDocs.length === 0) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px;">No documents uploaded yet. Upload up to 10 files (PDF, DOCX, XLSX, PY, JSON, HTML, TXT, CSV).</div>';
+    return;
+  }
+  list.innerHTML = state.memoryDocs.map(doc => {
+    const isEnabled = doc.enabled !== false;
+    const charCount = doc.content ? doc.content.length : 0;
+    return `
+      <div class="memory-doc-item" style="opacity:${isEnabled ? '1' : '0.55'};transition:opacity 0.2s;">
+        <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">
+          <div class="toggle-switch ${isEnabled ? 'active' : ''}" onclick="toggleMemoryDoc('${doc.id}')" title="${isEnabled ? 'Active in chat — click to disable' : 'Disabled — click to enable in chat'}"></div>
+          <div style="min-width:0;flex:1;">
+            <div style="font-size:13px;color:var(--text-primary);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(doc.name)}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${formatBytes(doc.size)} · ${(charCount / 1000).toFixed(1)}k chars extracted · ${isEnabled ? 'Active' : 'Muted'}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">
+          <button class="chat-action-btn" onclick="copyMemoryDoc('${doc.id}')" title="Copy Extracted Text">${ICONS.copy}</button>
+          <button class="chat-action-btn chat-item-delete" onclick="deleteMemoryDoc('${doc.id}')" title="Delete Document">${ICONS.trash}</button>
+        </div>
       </div>
-      <div style="display:flex;gap:4px;">
-        <button class="chat-action-btn" onclick="copyMemoryDoc('${doc.id}')" title="Copy Content">${ICONS.copy}</button>
-        <button class="chat-action-btn chat-item-delete" onclick="deleteMemoryDoc('${doc.id}')" title="Delete">${ICONS.trash}</button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function copyMemoryDoc(id) {
   const doc = state.memoryDocs.find(d => d.id === id);
-  if(!doc) return;
+  if (!doc) return;
   navigator.clipboard.writeText(doc.content || '');
-  showToast('Copied memory document', 'success');
+  showToast('Copied extracted document text', 'success');
 }
 
 function deleteMemoryDoc(id) {
   state.memoryDocs = state.memoryDocs.filter(d => d.id !== id);
-  localStorage.setItem('aiHub_memoryDocs', JSON.stringify(state.memoryDocs));
+  state.pendingAttachments = state.pendingAttachments.filter(a => a.docId !== id);
+  saveMemoryDocsToStorage();
+  renderPendingAttachments();
   renderMemoryDocs();
   updateMemorySize();
-  showToast('Memory document deleted', 'info');
+  showToast('Document removed from knowledge base', 'info');
 }
 
 function copyResponse(btn) {
@@ -2451,11 +2728,39 @@ async function sendMessage() {
     renderChatList();
   }
 
-  const userMsg = { role: 'user', content: text };
+  const attachmentMeta = currentAttachments.map(a => ({ name: a.name, size: a.size, type: a.type }));
+  const userMsg = {
+    role: 'user',
+    content: text || `[Uploaded: ${currentAttachments.map(a => a.name).join(', ')}]`,
+    ...(attachmentMeta.length > 0 ? { attachments: attachmentMeta } : {})
+  };
   chat.messages.push(userMsg);
-  appendMessageWithAttachments('user', text, currentAttachments);
+  appendMessageWithAttachments('user', userMsg.content, currentAttachments);
 
-  let finalPrompt = text;
+  let finalPrompt = text || 'Please analyze the attached document(s).';
+  const includedDocNames = new Set();
+  const docContextBlocks = [];
+
+  for (const att of currentAttachments) {
+    if (att.extractedText && att.extractedText.trim()) {
+      includedDocNames.add(att.name);
+      docContextBlocks.push(`=== UPLOADED DOCUMENT: ${att.name} ===\n${att.extractedText.substring(0, 60000)}\n=== END OF ${att.name} ===`);
+    }
+  }
+
+  const activeMemoryDocs = (state.memoryDocs || []).filter(d => d.enabled !== false && d.content && !includedDocNames.has(d.name));
+  for (const doc of activeMemoryDocs) {
+    includedDocNames.add(doc.name);
+    docContextBlocks.push(`=== ACTIVE KNOWLEDGE BASE DOCUMENT: ${doc.name} ===\n${doc.content.substring(0, 60000)}\n=== END OF ${doc.name} ===`);
+  }
+
+  if (state.settings.memoryContext && state.settings.memoryContext.trim()) {
+    docContextBlocks.push(`=== MEMORY CONTEXT ===\n${state.settings.memoryContext.trim()}\n=== END MEMORY CONTEXT ===`);
+  }
+
+  if (docContextBlocks.length > 0) {
+    finalPrompt = `${docContextBlocks.join('\n\n')}\n\nUser Query:\n${finalPrompt}`;
+  }
   let searchSources = [];
   if (state.isWebConnectivityActive && state.webScrapeEnabled) {
     const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
@@ -2556,6 +2861,27 @@ async function sendMessage() {
 
 function appendMessageWithAttachments(role, content, attachments) {
   appendMessageToUI(role, content, false);
+  if (attachments && attachments.length > 0) {
+    const messages = document.querySelectorAll('#messagesContainer .message.user');
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg) {
+      const contentCol = lastMsg.querySelector('.message-body-row');
+      if (contentCol) {
+        const bar = document.createElement('div');
+        bar.className = 'attachment-bar';
+        bar.innerHTML = attachments.map(att => `
+          <div class="file-attachment-card">
+            <span class="att-icon">${getFileIcon(att.type)}</span>
+            <div class="att-info">
+              <div class="att-name">${escapeHtml(att.name)}</div>
+              <div class="att-meta">${formatBytes(att.size)}</div>
+            </div>
+          </div>
+        `).join('');
+        contentCol.insertBefore(bar, contentCol.firstChild);
+      }
+    }
+  }
 }
 
 function appendMessageToUI(role, content, empty = false, msgId = null, sources = null) {

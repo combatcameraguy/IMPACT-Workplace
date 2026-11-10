@@ -2364,22 +2364,26 @@ function cleanHtmlToText(rawHtml) {
   return (title ? `Title: ${title}\n` : '') + text.substring(0, 12000);
 }
 
-function proxyBase() {
-  return window.location.protocol.startsWith('http') ? window.location.origin : null;
-}
-
 async function scrapeWebPage(url) {
-  const base = proxyBase();
-  if (base) {
-    try {
-      const r = await fetch(`${base}/api/proxy?url=${encodeURIComponent(url)}&crawl=true`, { signal: AbortSignal.timeout(25000) });
-      if (r.ok) {
-        const d = await r.json();
-        if (d.text && d.text.length > 30) return { ok: true, text: d.text };
+  try {
+    // Use a public CORS proxy to fetch the raw HTML
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (data.contents) {
+        // Use your existing HTML cleaner function
+        const cleanText = cleanHtmlToText(data.contents);
+        if (cleanText.length > 30) {
+          return { ok: true, text: cleanText };
+        }
       }
-    } catch {}
+    }
+  } catch (err) {
+    console.error("Scraping failed:", err);
   }
-  return { ok: false, error: 'all sources failed' };
+  return { ok: false, error: 'Failed to scrape webpage' };
 }
 
 async function performLiveWebSearch(query) {

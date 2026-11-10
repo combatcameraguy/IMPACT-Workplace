@@ -2571,10 +2571,32 @@ async function sendMessage() {
     renderChatList();
   }
 
+  // 1. Save and display the user's base message in the UI
   const userMsg = { role: 'user', content: text };
   chat.messages.push(userMsg);
   appendMessageWithAttachments('user', text, currentAttachments);
 
+  // 2. Web Connectivity Interceptor: Look for URLs and scrape them BEFORE hitting Ollama
+  let finalPrompt = text;
+  
+  if (state.isWebConnectivityActive) {
+    const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
+    if (urlMatch) {
+      const targetUrl = urlMatch[0];
+      updateSearchStatus(`Scraping ${targetUrl}...`);
+      const scrapeRes = await scrapeWebPage(targetUrl);
+      
+      if (scrapeRes.ok) {
+        // Inject the scraped text invisibly into the prompt payload sent to the LLM
+        finalPrompt += `\n\n[Web Page Content from ${targetUrl}]:\n${scrapeRes.text.substring(0, 15000)}`;
+        updateSearchStatus("Scrape complete.", true);
+      } else {
+        updateSearchStatus("Scraping failed or blocked by CORS.", true);
+      }
+    }
+  }
+
+  // 3. Prepare Assistant UI Block
   const msgId = 'msg_' + Date.now();
   appendMessageToUI('assistant', '', true, msgId);
   state.isStreaming = true; 
@@ -2583,13 +2605,28 @@ async function sendMessage() {
 
   const msgEl = document.querySelector(`[data-msg-id="${msgId}"] .message-text`);
 
+  // 4. Build API Payload (Now supporting Multi-Turn Chat History!)
+  let apiMessages = [];
+  if (state.settings.systemPrompt) {
+    apiMessages.push({ role: 'system', content: state.settings.systemPrompt });
+  }
+  
+  if (state.preserveThinking) {
+    // Send previous conversation history (excluding the message we just pushed to the UI)
+    const history = chat.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
+    apiMessages = apiMessages.concat(history);
+  }
+  
+  // Append the active prompt (with any hidden scraped HTML text injected)
+  apiMessages.push({ role: 'user', content: finalPrompt });
+
   try {
     const response = await fetch(getActiveOllamaBase() + '/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: getCurrentModel(),
-        messages: [{ role: 'user', content: text }],
+        messages: apiMessages,
         stream: true
       }),
       signal: state.abortController.signal

@@ -8972,42 +8972,31 @@ function downloadCoderFile() {
   
   let content = textarea.value;
   if (filename.endsWith('.html') || filename.endsWith('.htm')) {
-    if (!content.trim().startsWith('<!DOCTYPE')) {
+    if (!content.trim().toLowerCase().startsWith('<!doctype')) {
       content = '<!DOCTYPE html>\n' + content;
     }
   }
-  
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+
+  let mimeType = 'text/plain;charset=utf-8';
+  if (filename.endsWith('.json')) mimeType = 'application/json;charset=utf-8';
+  else if (filename.endsWith('.html') || filename.endsWith('.htm')) mimeType = 'text/html;charset=utf-8';
+  else if (filename.endsWith('.js')) mimeType = 'application/javascript;charset=utf-8';
+  else if (filename.endsWith('.css')) mimeType = 'text/css;charset=utf-8';
+
+  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
-  
-  // Try direct download first for better iOS compatibility
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.style.display = 'none';
-  
-  // Add to DOM before clicking for iOS Safari support
   document.body.appendChild(a);
-  
-  // Try immediate download
-  if (typeof a.click === 'function') {
-    a.click();
-  } else {
-    // Fallback for older browsers
-    const evt = new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
-      view: window
-    });
-    a.dispatchEvent(evt);
-  }
-  
-  // Clean up
+  a.click();
+
   setTimeout(() => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, 100);
-  
+  }, 60000);
+
   showToast(`Saved "${filename}"`, 'success');
 }
 function createSampleDocument(type) {
@@ -9138,14 +9127,35 @@ function createCSVFile(data, filename) {
 }
 
 function downloadBlob(blob, filename) {
+  // Try direct download first for better iOS compatibility
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.style.display = 'none';
+  
+  // Add to DOM before clicking for iOS Safari support
   document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 100);
+  
+  // Try immediate download
+  if (typeof a.click === 'function') {
+    a.click();
+  } else {
+    // Fallback for older browsers
+    const evt = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    });
+    a.dispatchEvent(evt);
+  }
+  
+  // Clean up
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+  
   showToast(`Downloading ${filename}`, 'success');
 }
 

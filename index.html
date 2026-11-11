@@ -405,7 +405,7 @@
   .wave-container {
     position: relative;
     width: 160px;
-    height: 120px;
+    height: 140px;
     margin-bottom: 100px;
     transform: translateZ(0);
     will-change: transform;
@@ -677,9 +677,33 @@
   .web-status-pill.active { display: inline-flex; }
   .web-status-pill .pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); animation: pulse 1.6s infinite; }
 
-  .topbar-actions { display: flex; gap: 6px; margin-left: auto; }
+  .topbar-actions { display: flex; gap: 6px; margin-left: auto; align-items: center; }
   .topbar-btn { width: 36px; height: 36px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
   .topbar-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  .topbar-agent-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-hover);
+    border: 1px solid var(--accent-primary);
+    color: var(--accent-primary);
+    box-shadow: 0 0 16px var(--accent-glow), inset 0 0 8px var(--accent-glow);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    animation: fadeIn 0.25s ease;
+  }
+  .topbar-agent-badge.active {
+    display: flex;
+  }
+  .topbar-agent-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 22px var(--accent-glow), inset 0 0 10px var(--accent-glow);
+  }
 
   .chat-container { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; display: flex; flex-direction: column; width: 100%; transition: max-width 0.35s cubic-bezier(0.4,0,0.2,1); }
 
@@ -992,12 +1016,368 @@
     transform: translateY(-1px);
   }
 
+  .coder-panel {
+    width: 520px;
+    min-width: 340px;
+    max-width: 75vw;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+    z-index: 95;
+    position: relative;
+    overflow: hidden;
+  }
+  .coder-panel.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    border-left: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .coder-resizer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    z-index: 105;
+    background: transparent;
+    transition: background 0.2s;
+  }
+  .coder-resizer:hover, .coder-resizer.dragging {
+    background: var(--accent-primary);
+  }
+  .coder-header {
+    height: calc(var(--topbar-height) + env(safe-area-inset-top));
+    min-height: calc(var(--topbar-height) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 14px 0;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+  }
+  .coder-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-input);
+    padding: 3px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+  }
+  .coder-tab {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+  .coder-tab.active {
+    background: var(--bg-tertiary);
+    color: var(--accent-primary);
+    box-shadow: var(--shadow-sm);
+  }
+  .coder-toolbar {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .coder-filename-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    width: 150px;
+    outline: none;
+  }
+  .coder-filename-input:focus {
+    border-color: var(--accent-primary);
+  }
+  .coder-btn {
+    padding: 5px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+  .coder-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+  }
+  .coder-btn.primary {
+    background: var(--gradient-primary);
+    color: #1a1a2e;
+    border: none;
+  }
+  .coder-body {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-input);
+  }
+  .coder-editor-wrap {
+    flex: 1;
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    background: var(--bg-input);
+  }
+  .coder-line-numbers {
+    width: 48px;
+    padding: 14px 8px;
+    background: var(--bg-primary);
+    border-right: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: right;
+    user-select: none;
+    overflow: hidden;
+    flex-shrink: 0;
+    z-index: 3;
+  }
+  .coder-line-numbers .ln-match {
+    color: var(--accent-gold);
+    font-weight: 700;
+    background: rgba(255, 203, 5, 0.15);
+    display: block;
+    margin: 0 -8px;
+    padding: 0 8px;
+    border-right: 2px solid var(--accent-gold);
+  }
+  .coder-editor-stack {
+    flex: 1;
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-input);
+  }
+  .coder-backdrop {
+    position: absolute;
+    inset: 0;
+    padding: 14px;
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre;
+    overflow: auto;
+    pointer-events: none;
+    color: transparent;
+    background: transparent;
+    tab-size: 2;
+    z-index: 1;
+  }
+  .coder-backdrop::-webkit-scrollbar {
+    display: none;
+  }
+  .coder-backdrop mark.code-find-match {
+    background: rgba(255, 203, 5, 0.22);
+    border-bottom: 1px dashed rgba(255, 203, 5, 0.75);
+    color: transparent;
+    border-radius: 2px;
+  }
+  .coder-backdrop mark.code-find-active {
+    background: rgba(0, 206, 201, 0.36);
+    outline: 2px solid var(--accent-green);
+    box-shadow: 0 0 14px var(--accent-green-glow);
+    color: transparent;
+    border-radius: 2px;
+  }
+  .coder-textarea {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 14px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    caret-color: var(--accent-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow: auto;
+    tab-size: 2;
+    z-index: 2;
+  }
+  .coder-finder-drawer {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 14px;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-md);
+    z-index: 20;
+  }
+  .coder-finder-drawer.open {
+    display: flex;
+  }
+  .coder-finder-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  @media (max-width: 640px) {
+    .coder-finder-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .coder-finder-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .coder-finder-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .coder-finder-box {
+    width: 100%;
+    height: 74px;
+    padding: 8px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    resize: vertical;
+    outline: none;
+    white-space: pre;
+    overflow: auto;
+    tab-size: 2;
+  }
+  .coder-finder-box:focus {
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-glow);
+  }
+  .coder-finder-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .coder-finder-badge {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--accent-secondary);
+  }
+  .coder-finder-badge.has-match {
+    color: var(--accent-green);
+    border-color: rgba(0, 206, 201, 0.45);
+    background: rgba(0, 206, 201, 0.1);
+  }
+  .coder-finder-badge.no-match {
+    color: var(--accent-red);
+    border-color: rgba(231, 76, 60, 0.45);
+    background: rgba(231, 76, 60, 0.1);
+  }
+  .coder-btn.active-finder {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+    background: rgba(0, 206, 201, 0.12);
+    box-shadow: 0 0 10px var(--accent-green-glow);
+  }
+  .coder-preview-wrap {
+    flex: 1;
+    height: 100%;
+    background: #ffffff;
+    display: none;
+    flex-direction: column;
+  }
+  .coder-preview-wrap.active {
+    display: flex;
+  }
+  .coder-iframe {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #ffffff;
+  }
+  .coder-statusbar {
+    padding: 6px 14px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+  }
+  .topbar-btn.active-coder {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+
   @media (max-width: 768px) {
     .sidebar {
       position: absolute;
       top: 0; left: 0; bottom: 0;
       z-index: 1000;
       box-shadow: 4px 0 24px rgba(0,0,0,0.6);
+    }
+    .coder-panel {
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 100% !important;
+      max-width: 100vw;
+      z-index: 1000;
     }
   }
 </style>
@@ -1052,7 +1432,7 @@
       <div class="prompt-card-title">State Grant Agent</div>
       <div class="prompt-card-desc">Activate elite state grant writer agent and start an application</div>
     </button>
-    <button class="prompt-card" data-mode="coder_agent" onclick="setAgentMode('coder_agent', this); usePrompt('I need help building a web interface. Here are the requirements:'); showToast('Coder Agent Activated', 'success');">
+    <button class="prompt-card" data-mode="coder_agent" onclick="setAgentMode('coder_agent', this); if(!state.coderOpen) toggleCoderPanel(); if(state.sidebarOpen) toggleSidebar(); usePrompt('I need help building a web interface. Here are the requirements:'); showToast('Coder Agent & Studio Activated', 'success');">
       <div class="prompt-card-icon">
         <svg class="ico ico-lg" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
       </div>
@@ -1171,6 +1551,7 @@
     <div class="topbar-activity"></div>
 
     <div class="topbar-actions">
+      <div class="topbar-agent-badge" id="topbarAgentBadge" onclick="clearAgentMode()" title="Active Agent"></div>
       <button class="topbar-btn" onclick="triggerImportChat()" title="Import Chat JSON">
         <svg class="ico" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       </button>
@@ -1182,7 +1563,7 @@
       <button class="topbar-btn" onclick="openSettings()" title="Advanced Settings">
         <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
-      <button class="topbar-btn" onclick="toggleSidebar()" title="Toggle Panel">
+      <button class="topbar-btn" onclick="toggleSidebar()" title="Toggle Left Panel">
         <svg class="ico" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
     </div>
@@ -1262,6 +1643,130 @@
   </div>
 </main>
 
+<aside class="coder-panel collapsed" id="coderPanel">
+  <div class="coder-resizer" id="coderResizer" title="Drag to resize"></div>
+  <div class="coder-header">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <svg class="ico" style="color:var(--accent-primary);" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      <span style="font-size:14px;font-weight:700;">Coder Studio</span>
+    </div>
+    <div class="coder-tabs">
+      <button class="coder-tab active" id="coderTabEditor" onclick="switchCoderTab('editor')">Code</button>
+      <button class="coder-tab" id="coderTabSplit" onclick="switchCoderTab('split')">Split</button>
+      <button class="coder-tab" id="coderTabPreview" onclick="switchCoderTab('preview')">Live Preview</button>
+    </div>
+    <button class="topbar-btn" style="width:30px;height:30px;" onclick="toggleCoderPanel()" title="Close Coder Panel">
+      <svg class="ico ico-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <div class="coder-toolbar">
+    <input type="text" class="coder-filename-input" id="coderFilename" value="index.html" placeholder="filename.html">
+    <button class="coder-btn" onclick="document.getElementById('coderOpenFileInput').click()" title="Open Local File">
+      <svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Open
+    </button>
+    <input type="file" id="coderOpenFileInput" class="hidden-input" accept=".html,.htm,.css,.js,.ts,.py,.json,.md,.txt,.sh,.xml,.yaml,.yml" onchange="openFileInCoder(event)">
+    <button class="coder-btn" onclick="loadSelfIntoCoder()" title="Load this current IMPACT Workspace HTML into the editor">
+      <svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      Load This UI
+    </button>
+    <button class="coder-btn" onclick="sendCoderToAI()" title="Send active editor code into chat context for AI to inspect or edit">
+      <svg class="ico ico-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Ask AI
+    </button>
+    <button class="coder-btn" onclick="runCoderPreview()" title="Run / Refresh Live Preview">
+      <svg class="ico ico-sm" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Run
+    </button>
+    <button class="coder-btn" id="coderFinderToggleBtn" onclick="toggleCoderFinder()" title="Find & Replace Multi-Line Code Blocks (Ctrl+F)">
+      <svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Block Finder
+    </button>
+    <button class="coder-btn" onclick="undoCoderEdit()" title="Undo Last Edit / Replacement">
+      <svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      Undo
+    </button>
+    <button class="coder-btn" onclick="copyCoderContent()" title="Copy All Editor Code">
+      <svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Copy
+    </button>
+    <button class="coder-btn primary" onclick="downloadCoderFile()" title="Download / Save file to PC">
+      <svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Save File
+    </button>
+  </div>
+
+  <div class="coder-finder-drawer" id="coderFinderDrawer">
+    <div class="coder-finder-grid">
+      <div class="coder-finder-col">
+        <div class="coder-finder-label">
+          <span>Find Code Block (DELETE target)</span>
+        </div>
+        <textarea class="coder-finder-box" id="coderFindInput" spellcheck="false" placeholder="Paste single line or multi-line DELETE code block here..."></textarea>
+      </div>
+      <div class="coder-finder-col">
+        <div class="coder-finder-label">
+          <span>Paste New Code (PASTE replacement)</span>
+        </div>
+        <textarea class="coder-finder-box" id="coderReplaceInput" spellcheck="false" placeholder="Paste new multi-line PASTE replacement block here..."></textarea>
+      </div>
+    </div>
+    <div class="coder-finder-controls">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span class="coder-finder-badge" id="coderMatchBadge">0 matches</span>
+        <button class="coder-btn" style="padding: 6px 14px; font-size: 12px;" onclick="clearFinderQuery()" title="Clear both Find and Replace boxes">
+          <svg class="ico ico-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Clear
+        </button>
+        <button class="coder-btn" onclick="stepCoderMatch(-1)" title="Previous Match (Shift+Enter)">
+          <svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+          Prev
+        </button>
+        <button class="coder-btn" onclick="stepCoderMatch(1)" title="Next Match (Enter)">
+          <svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+          Next
+        </button>
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);cursor:pointer;margin-left:4px;" title="Matches multi-line code blocks even if leading indentation spaces differ">
+          <input type="checkbox" id="coderSmartIndent" checked onchange="runCoderSearch(true)">
+          Smart Indent
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);cursor:pointer;margin-left:4px;">
+          <input type="checkbox" id="coderCaseSensitive" onchange="runCoderSearch(true)">
+          Match Case
+        </label>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="coder-btn primary" onclick="replaceActiveCoderMatch()" title="Directly replace the highlighted code block with the new code">
+          <svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Paste & Replace Highlighted
+        </button>
+        <button class="coder-btn" onclick="replaceAllCoderMatches()" title="Replace all matching blocks">
+          Replace All
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="coder-body" id="coderBody">
+    <div class="coder-editor-wrap" id="coderEditorWrap">
+      <div class="coder-line-numbers" id="coderLineNumbers">1</div>
+      <div class="coder-editor-stack">
+        <pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true"></pre>
+        <textarea class="coder-textarea" id="coderTextarea" spellcheck="false" placeholder="// Write or paste code here, click 'Load This UI', or click 'To Editor' on any AI code block..."></textarea>
+      </div>
+    </div>
+    <div class="coder-preview-wrap" id="coderPreviewWrap">
+      <iframe class="coder-iframe" id="coderIframe" sandbox="allow-scripts allow-same-origin allow-forms allow-modals"></iframe>
+    </div>
+  </div>
+
+  <div class="coder-statusbar">
+    <span id="coderStats">Lines: 1 | Chars: 0</span>
+    <span id="coderSavedStatus">Auto-saved to local storage</span>
+  </div>
+</aside>
+
 <div class="modal-overlay" id="settingsModal">
   <div class="modal">
     <div class="modal-header">
@@ -1280,6 +1785,17 @@
           Theme Color
         </div>
         <div class="theme-grid" id="modalThemeGrid"></div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-label">
+          <svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Coder Studio
+        </div>
+        <button class="btn btn-secondary" id="coderToggleBtn" onclick="toggleCoderPanel(); closeModal('settingsModal');" style="width: 100%; justify-content: center;">
+          <svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span id="coderToggleBtnLabel">Open Right Coder Studio</span>
+        </button>
       </div>
 
       <div class="setting-group">
@@ -1592,6 +2108,7 @@ document.addEventListener('DOMContentLoaded', () => {
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
   dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
 
+  initCoderStudio();
   setInterval(checkConnection, 30000);
 });
 
@@ -1951,7 +2468,7 @@ function loadChat(id) {
   if(!chat) return;
   document.getElementById('messagesContainer').innerHTML = '';
   document.getElementById('welcomeScreen').style.display = 'none';
-  if(chat.agentMode) setAgentMode(chat.agentMode, null);
+  setAgentMode(chat.agentMode || 'chat', null);
   chat.messages.forEach(msg => {
     appendMessageToUI(msg.role, msg.content, false, null, msg.sources);
   });
@@ -2066,8 +2583,28 @@ function renderChatList() {
   `).join('');
 }
 
+const AGENT_BADGE_META = {
+  federal_grant: {
+    label: 'Federal Grant Agent Active (Click to reset to standard chat)',
+    svg: `<svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`
+  },
+  state_grant: {
+    label: 'State Grant Agent Active (Click to reset to standard chat)',
+    svg: `<svg class="ico" viewBox="0 0 24 24"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>`
+  },
+  coder_agent: {
+    label: 'Coder Agent Active (Click to reset to standard chat)',
+    svg: `<svg class="ico" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`
+  }
+};
+
+function clearAgentMode() {
+  setAgentMode('chat', null);
+  showToast('Switched to Standard Chat Mode', 'info');
+}
+
 function syncAgentGlowUI() {
-  const isAgentActive = state.agentMode && state.agentMode !== 'chat';
+  const isAgentActive = !!(state.agentMode && state.agentMode !== 'chat');
   document.querySelectorAll('.prompt-card').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === state.agentMode);
   });
@@ -2077,6 +2614,19 @@ function syncAgentGlowUI() {
   if (advInput) advInput.value = state.settings.systemPrompt || defaultSettings.systemPrompt;
   const modalInput = document.getElementById('modalSystemPrompt');
   if (modalInput) modalInput.value = state.settings.systemPrompt || defaultSettings.systemPrompt;
+
+  const badge = document.getElementById('topbarAgentBadge');
+  if (badge) {
+    const meta = AGENT_BADGE_META[state.agentMode];
+    if (isAgentActive && meta) {
+      badge.innerHTML = meta.svg;
+      badge.title = meta.label;
+      badge.classList.add('active');
+    } else {
+      badge.innerHTML = '';
+      badge.classList.remove('active');
+    }
+  }
 }
 
 function setAgentMode(mode, btnEl) {
@@ -2315,7 +2865,8 @@ caches, resetting, force-overwriting) without reading first.
 - If the user says "everything", "all", "whole thing", or asks for the full set of changes, re-emit every block for that scope in one response regardless of whether any were already provided earlier. 
 - First character of output is the opening fence of the first DELETE block. 
 - Last character is the closing fence of the last PASTE block. 
-- Provide the exact code that needs updating, then provide the exact code block to replace.
+- Provide the exact code block that needs updating, then provide the exact code block to replace.
+
 
 =====================================================================
 4. CODE QUALITY
@@ -3045,7 +3596,11 @@ function formatMessage(text) {
     const block = codeBlocks[Number(idx)];
     const safeCode = escapeHtml(block.code);
     const safeLang = escapeHtml(block.lang);
-    return `<div class="code-block-wrapper"><div class="code-block-header"><span>${safeLang}</span><button class="code-copy-btn" onclick="copyCodeBlock(this)" title="Copy Code">${copySvgIcon}<span>Copy</span></button></div><pre><code>${safeCode}</code></pre><div class="code-block-footer"><button class="code-copy-btn" onclick="copyCodeBlock(this)" title="Copy Code">${copySvgIcon}<span>Copy</span></button></div></div>`;
+    const sendToFindBtn = `<button class="code-copy-btn" onclick="sendCodeBlockToFinder(this, 'find')" title="Send this block to Block Finder (DELETE target)"><svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span>To Find</span></button>`;
+    const sendToReplaceBtn = `<button class="code-copy-btn" onclick="sendCodeBlockToFinder(this, 'replace')" title="Send this block to Replacement box (PASTE block)"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg><span>To Replace</span></button>`;
+    const sendToCoderBtn = `<button class="code-copy-btn" onclick="sendCodeBlockToEditor(this)" title="Replace full editor content with this code block"><svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span>To Editor</span></button>`;
+    const actionBtns = `${sendToFindBtn}${sendToReplaceBtn}${sendToCoderBtn}<button class="code-copy-btn" onclick="copyCodeBlock(this)" title="Copy Code">${copySvgIcon}<span>Copy</span></button>`;
+    return `<div class="code-block-wrapper"><div class="code-block-header"><span>${safeLang}</span><div style="display:flex;gap:6px;flex-wrap:wrap;">${actionBtns}</div></div><pre><code>${safeCode}</code></pre><div class="code-block-footer"><div style="display:flex;gap:6px;flex-wrap:wrap;">${actionBtns}</div></div></div>`;
   });
 
   return html;
@@ -3139,6 +3694,609 @@ function showToast(msg, type = 'info') {
   t.innerHTML = `<span>${ICONS.info}</span><span>${escapeHtml(msg)}</span>`;
   c.appendChild(t);
   setTimeout(() => t.remove(), 3500);
+}
+
+// ===== RIGHT CODER STUDIO PANEL & MULTI-LINE BLOCK FINDER =====
+let coderSearchMatches = [];
+let coderActiveMatchIdx = -1;
+let coderUndoStack = [];
+
+function pushCoderUndo(prevText) {
+  if (coderUndoStack.length > 25) coderUndoStack.shift();
+  coderUndoStack.push(prevText);
+}
+
+function undoCoderEdit() {
+  const textarea = document.getElementById('coderTextarea');
+  if (!textarea || coderUndoStack.length === 0) {
+    showToast('Nothing to undo', 'info');
+    return;
+  }
+  textarea.value = coderUndoStack.pop();
+  localStorage.setItem('aiHub_coderContent', textarea.value);
+  runCoderSearch(false);
+  updateCoderLineNumbers();
+  showToast('Reverted last code edit', 'info');
+}
+
+function initCoderStudio() {
+  state.coderOpen = localStorage.getItem('aiHub_coderOpen') === 'true';
+  const savedCode = localStorage.getItem('aiHub_coderContent') || '';
+  const savedName = localStorage.getItem('aiHub_coderFilename') || 'index.html';
+  const savedWidth = localStorage.getItem('aiHub_coderWidth');
+
+  const panel = document.getElementById('coderPanel');
+  const textarea = document.getElementById('coderTextarea');
+  const backdrop = document.getElementById('coderBackdrop');
+  const filenameInput = document.getElementById('coderFilename');
+  const toggleBtn = document.getElementById('coderToggleBtn');
+  const findInput = document.getElementById('coderFindInput');
+
+  if (savedWidth && panel) panel.style.width = savedWidth + 'px';
+  if (textarea) textarea.value = savedCode;
+  if (filenameInput) filenameInput.value = savedName;
+  if (state.coderOpen && panel) {
+    panel.classList.remove('collapsed');
+    toggleBtn?.classList.add('active-coder');
+  }
+  const toggleBtnLabel = document.getElementById('coderToggleBtnLabel');
+  if (toggleBtnLabel) {
+    toggleBtnLabel.textContent = state.coderOpen ? 'Close Right Coder Studio' : 'Open Right Coder Studio';
+  }
+  updateCoderLineNumbers();
+  renderCoderBackdrop();
+
+  textarea?.addEventListener('input', () => {
+    runCoderSearch(false);
+    updateCoderLineNumbers();
+    localStorage.setItem('aiHub_coderContent', textarea.value);
+    const status = document.getElementById('coderSavedStatus');
+    if (status) status.textContent = 'Saved ' + new Date().toLocaleTimeString();
+  });
+
+  textarea?.addEventListener('scroll', () => {
+    const ln = document.getElementById('coderLineNumbers');
+    if (ln) ln.scrollTop = textarea.scrollTop;
+    if (backdrop) {
+      backdrop.scrollTop = textarea.scrollTop;
+      backdrop.scrollLeft = textarea.scrollLeft;
+    }
+  });
+
+  textarea?.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      openCoderFinderWithSelection();
+      return;
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      pushCoderUndo(textarea.value);
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      textarea.value = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
+      textarea.selectionStart = textarea.selectionEnd = start + 2;
+      runCoderSearch(false);
+      updateCoderLineNumbers();
+      localStorage.setItem('aiHub_coderContent', textarea.value);
+    }
+  });
+
+  findInput?.addEventListener('input', () => {
+    runCoderSearch(true);
+  });
+
+  findInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      stepCoderMatch(e.shiftKey ? -1 : 1);
+    }
+  });
+
+  filenameInput?.addEventListener('change', () => {
+    localStorage.setItem('aiHub_coderFilename', filenameInput.value.trim() || 'index.html');
+  });
+
+  const resizer = document.getElementById('coderResizer');
+  let isResizing = false;
+  resizer?.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    resizer.classList.add('dragging');
+    panel.style.transition = 'none';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isResizing || !panel) return;
+    const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 340), window.innerWidth * 0.75);
+    panel.style.width = newWidth + 'px';
+    localStorage.setItem('aiHub_coderWidth', Math.round(newWidth));
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isResizing && panel) {
+      isResizing = false;
+      resizer?.classList.remove('dragging');
+      panel.style.transition = '';
+      document.body.style.userSelect = '';
+    }
+  });
+}
+
+function toggleCoderFinder(forceState) {
+  const drawer = document.getElementById('coderFinderDrawer');
+  const btn = document.getElementById('coderFinderToggleBtn');
+  if (!drawer) return;
+  const shouldOpen = typeof forceState === 'boolean' ? forceState : !drawer.classList.contains('open');
+  drawer.classList.toggle('open', shouldOpen);
+  btn?.classList.toggle('active-finder', shouldOpen);
+  if (shouldOpen) {
+    document.getElementById('coderFindInput')?.focus();
+    runCoderSearch(true);
+  }
+}
+
+function openCoderFinderWithSelection() {
+  const textarea = document.getElementById('coderTextarea');
+  const findInput = document.getElementById('coderFindInput');
+  toggleCoderFinder(true);
+  if (textarea && findInput) {
+    const sel = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
+    if (sel) {
+      findInput.value = sel;
+      runCoderSearch(true);
+    }
+    findInput.focus();
+  }
+}
+
+function clearFinderQuery() {
+  const findInput = document.getElementById('coderFindInput');
+  const replaceInput = document.getElementById('coderReplaceInput');
+  if (findInput) findInput.value = '';
+  if (replaceInput) replaceInput.value = '';
+  coderSearchMatches = [];
+  coderActiveMatchIdx = -1;
+  updateMatchBadge();
+  renderCoderBackdrop();
+  updateCoderLineNumbers();
+}
+
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findCodeMatches(code, query, caseSensitive, smartIndent) {
+  if (!query) return [];
+  const matches = [];
+  const normQuery = query.replace(/\r\n/g, '\n');
+
+  // 1. Exact or case-insensitive direct match
+  const flags = caseSensitive ? 'g' : 'gi';
+  const exactRegex = new RegExp(escapeRegExp(normQuery), flags);
+  let m;
+  while ((m = exactRegex.exec(code)) !== null) {
+    if (m[0].length === 0) { exactRegex.lastIndex++; continue; }
+    matches.push({ start: m.index, end: m.index + m[0].length });
+  }
+
+  // 2. Smart multi-line indentation-tolerant fallback if exact match didn't hit
+  if (matches.length === 0 && smartIndent && normQuery.includes('\n')) {
+    const lines = normQuery.split('\n').map(l => l.trim());
+    while (lines.length > 0 && lines[0] === '') lines.shift();
+    while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+    if (lines.length > 0) {
+      const pattern = lines.map(l => l === '' ? '[ \\t]*' : '[ \\t]*' + escapeRegExp(l) + '[ \\t]*').join('\\r?\\n');
+      try {
+        const flexRegex = new RegExp(pattern, flags);
+        while ((m = flexRegex.exec(code)) !== null) {
+          if (m[0].length === 0) { flexRegex.lastIndex++; continue; }
+          matches.push({ start: m.index, end: m.index + m[0].length });
+        }
+      } catch (_) {}
+    }
+  }
+  return matches;
+}
+
+function runCoderSearch(scrollToFirst = true) {
+  const textarea = document.getElementById('coderTextarea');
+  const findInput = document.getElementById('coderFindInput');
+  if (!textarea || !findInput) return;
+
+  const code = textarea.value || '';
+  const query = findInput.value || '';
+  const caseSensitive = !!document.getElementById('coderCaseSensitive')?.checked;
+  const smartIndent = !!document.getElementById('coderSmartIndent')?.checked;
+
+  if (!query) {
+    coderSearchMatches = [];
+    coderActiveMatchIdx = -1;
+    updateMatchBadge();
+    renderCoderBackdrop();
+    updateCoderLineNumbers();
+    return;
+  }
+
+  coderSearchMatches = findCodeMatches(code, query, caseSensitive, smartIndent);
+  if (coderSearchMatches.length === 0) {
+    coderActiveMatchIdx = -1;
+  } else if (coderActiveMatchIdx < 0 || coderActiveMatchIdx >= coderSearchMatches.length) {
+    coderActiveMatchIdx = 0;
+  }
+
+  updateMatchBadge();
+  renderCoderBackdrop();
+  updateCoderLineNumbers();
+  if (scrollToFirst && coderActiveMatchIdx >= 0) {
+    scrollToCoderMatch(coderActiveMatchIdx);
+  }
+}
+
+function stepCoderMatch(delta) {
+  if (coderSearchMatches.length === 0) {
+    runCoderSearch(true);
+    return;
+  }
+  coderActiveMatchIdx = (coderActiveMatchIdx + delta + coderSearchMatches.length) % coderSearchMatches.length;
+  updateMatchBadge();
+  renderCoderBackdrop();
+  updateCoderLineNumbers();
+  scrollToCoderMatch(coderActiveMatchIdx);
+}
+
+function scrollToCoderMatch(idx) {
+  const textarea = document.getElementById('coderTextarea');
+  const backdrop = document.getElementById('coderBackdrop');
+  const ln = document.getElementById('coderLineNumbers');
+  const match = coderSearchMatches[idx];
+  if (!textarea || !match) return;
+
+  const beforeText = textarea.value.substring(0, match.start);
+  const lineIndex = beforeText.split('\n').length - 1;
+  const lineHeight = 13 * 1.6; // 20.8px matching CSS
+  const targetTop = Math.max(0, (lineIndex * lineHeight) - (textarea.clientHeight * 0.25));
+
+  textarea.scrollTop = targetTop;
+  if (backdrop) backdrop.scrollTop = targetTop;
+  if (ln) ln.scrollTop = targetTop;
+}
+
+function updateMatchBadge() {
+  const badge = document.getElementById('coderMatchBadge');
+  const findInput = document.getElementById('coderFindInput');
+  if (!badge) return;
+  const hasQuery = !!(findInput && findInput.value.length > 0);
+  badge.classList.remove('has-match', 'no-match');
+
+  if (!hasQuery) {
+    badge.textContent = '0 matches';
+    return;
+  }
+  if (coderSearchMatches.length === 0) {
+    badge.textContent = 'No match found';
+    badge.classList.add('no-match');
+  } else {
+    const activeMatch = coderSearchMatches[coderActiveMatchIdx];
+    const textarea = document.getElementById('coderTextarea');
+    let lineInfo = '';
+    if (activeMatch && textarea) {
+      const startLine = textarea.value.substring(0, activeMatch.start).split('\n').length;
+      const endLine = textarea.value.substring(0, activeMatch.end).split('\n').length;
+      lineInfo = startLine === endLine ? ` (Line ${startLine})` : ` (Lines ${startLine}-${endLine})`;
+    }
+    badge.textContent = `${coderActiveMatchIdx + 1} of ${coderSearchMatches.length}${lineInfo}`;
+    badge.classList.add('has-match');
+  }
+}
+
+function renderCoderBackdrop() {
+  const textarea = document.getElementById('coderTextarea');
+  const backdrop = document.getElementById('coderBackdrop');
+  if (!textarea || !backdrop) return;
+
+  const code = textarea.value || '';
+  if (coderSearchMatches.length === 0) {
+    backdrop.innerHTML = escapeHtml(code) + '\n';
+    return;
+  }
+
+  let html = '';
+  let lastIndex = 0;
+  coderSearchMatches.forEach((m, idx) => {
+    html += escapeHtml(code.slice(lastIndex, m.start));
+    const cls = idx === coderActiveMatchIdx ? 'code-find-match code-find-active' : 'code-find-match';
+    html += `<mark class="${cls}">${escapeHtml(code.slice(m.start, m.end))}</mark>`;
+    lastIndex = m.end;
+  });
+  html += escapeHtml(code.slice(lastIndex)) + '\n';
+  backdrop.innerHTML = html;
+  backdrop.scrollTop = textarea.scrollTop;
+  backdrop.scrollLeft = textarea.scrollLeft;
+}
+
+function replaceActiveCoderMatch() {
+  const textarea = document.getElementById('coderTextarea');
+  const replaceInput = document.getElementById('coderReplaceInput');
+  if (!textarea || !replaceInput) return;
+
+  if (coderSearchMatches.length === 0 || coderActiveMatchIdx < 0) {
+    showToast('No highlighted code block to replace', 'error');
+    return;
+  }
+
+  const match = coderSearchMatches[coderActiveMatchIdx];
+  const replacement = replaceInput.value;
+  pushCoderUndo(textarea.value);
+
+  const before = textarea.value.slice(0, match.start);
+  const after = textarea.value.slice(match.end);
+  textarea.value = before + replacement + after;
+
+  localStorage.setItem('aiHub_coderContent', textarea.value);
+
+  // Highlight the newly pasted block in the editor or move to next match
+  const findInput = document.getElementById('coderFindInput');
+  if (findInput && replacement.trim()) {
+    findInput.value = replacement;
+  }
+  runCoderSearch(true);
+  updateCoderLineNumbers();
+
+  const status = document.getElementById('coderSavedStatus');
+  if (status) status.textContent = 'Replaced & saved ' + new Date().toLocaleTimeString();
+  showToast('Replaced highlighted block directly!', 'success');
+}
+
+function replaceAllCoderMatches() {
+  const textarea = document.getElementById('coderTextarea');
+  const replaceInput = document.getElementById('coderReplaceInput');
+  if (!textarea || !replaceInput) return;
+
+  if (coderSearchMatches.length === 0) {
+    showToast('No matching blocks found to replace', 'error');
+    return;
+  }
+
+  const count = coderSearchMatches.length;
+  const replacement = replaceInput.value;
+  pushCoderUndo(textarea.value);
+
+  let updated = textarea.value;
+  for (let i = coderSearchMatches.length - 1; i >= 0; i--) {
+    const m = coderSearchMatches[i];
+    updated = updated.slice(0, m.start) + replacement + updated.slice(m.end);
+  }
+  textarea.value = updated;
+  localStorage.setItem('aiHub_coderContent', textarea.value);
+
+  const findInput = document.getElementById('coderFindInput');
+  if (findInput && replacement.trim()) {
+    findInput.value = replacement;
+  }
+  runCoderSearch(true);
+  updateCoderLineNumbers();
+  showToast(`Replaced ${count} block(s) in code!`, 'success');
+}
+
+function sendCodeBlockToFinder(btn, targetBox) {
+  const wrapper = btn.closest('.code-block-wrapper');
+  const codeEl = wrapper?.querySelector('pre code');
+  if (!codeEl) return;
+
+  if (!state.coderOpen) toggleCoderPanel();
+  toggleCoderFinder(true);
+
+  if (targetBox === 'replace') {
+    const replaceInput = document.getElementById('coderReplaceInput');
+    if (replaceInput) {
+      replaceInput.value = codeEl.textContent;
+      showToast('Loaded block into Paste/Replace box', 'success');
+    }
+  } else {
+    const findInput = document.getElementById('coderFindInput');
+    if (findInput) {
+      findInput.value = codeEl.textContent;
+      runCoderSearch(true);
+      showToast(
+        coderSearchMatches.length > 0
+          ? `Found & highlighted block (${coderSearchMatches.length} match)`
+          : 'Loaded into Finder — no match in current file',
+        coderSearchMatches.length > 0 ? 'success' : 'info'
+      );
+    }
+  }
+}
+
+function toggleCoderPanel() {
+  const panel = document.getElementById('coderPanel');
+  const btn = document.getElementById('coderToggleBtn');
+  const btnLabel = document.getElementById('coderToggleBtnLabel');
+  if (!panel) return;
+  state.coderOpen = panel.classList.contains('collapsed');
+  panel.classList.toggle('collapsed', !state.coderOpen);
+  btn?.classList.toggle('active-coder', state.coderOpen);
+  if (btnLabel) {
+    btnLabel.textContent = state.coderOpen ? 'Close Right Coder Studio' : 'Open Right Coder Studio';
+  }
+  localStorage.setItem('aiHub_coderOpen', state.coderOpen);
+  if (state.coderOpen) {
+    updateCoderLineNumbers();
+    renderCoderBackdrop();
+  } else {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar && sidebar.classList.contains('collapsed')) {
+      toggleSidebar();
+    }
+    if (state.agentMode === 'coder_agent') {
+      if (state.isStreaming) stopGeneration();
+      setAgentMode('chat', null);
+      showToast('Coder Agent deactivated', 'info');
+    }
+  }
+}
+
+function updateCoderLineNumbers() {
+  const textarea = document.getElementById('coderTextarea');
+  const ln = document.getElementById('coderLineNumbers');
+  const stats = document.getElementById('coderStats');
+  if (!textarea || !ln) return;
+  const val = textarea.value || '';
+  const totalLines = val.split('\n').length;
+
+  const matchedLines = new Set();
+  if (coderSearchMatches.length > 0 && coderActiveMatchIdx >= 0) {
+    const active = coderSearchMatches[coderActiveMatchIdx];
+    const startLine = val.substring(0, active.start).split('\n').length;
+    const endLine = val.substring(0, active.end).split('\n').length;
+    for (let l = startLine; l <= endLine; l++) matchedLines.add(l);
+  }
+
+  const lineHtml = [];
+  for (let i = 1; i <= totalLines; i++) {
+    if (matchedLines.has(i)) {
+      lineHtml.push(`<span class="ln-match">${i}</span>`);
+    } else {
+      lineHtml.push(i);
+    }
+  }
+  ln.innerHTML = lineHtml.join('<br>');
+  if (stats) stats.textContent = `Lines: ${totalLines} | Chars: ${val.length.toLocaleString()}`;
+}
+
+function switchCoderTab(mode) {
+  document.getElementById('coderTabEditor')?.classList.toggle('active', mode === 'editor');
+  document.getElementById('coderTabSplit')?.classList.toggle('active', mode === 'split');
+  document.getElementById('coderTabPreview')?.classList.toggle('active', mode === 'preview');
+
+  const editorWrap = document.getElementById('coderEditorWrap');
+  const previewWrap = document.getElementById('coderPreviewWrap');
+  if (!editorWrap || !previewWrap) return;
+
+  if (mode === 'editor') {
+    editorWrap.style.display = 'flex';
+    previewWrap.classList.remove('active');
+  } else if (mode === 'preview') {
+    editorWrap.style.display = 'none';
+    previewWrap.classList.add('active');
+    runCoderPreview();
+  } else if (mode === 'split') {
+    editorWrap.style.display = 'flex';
+    previewWrap.classList.add('active');
+    previewWrap.style.borderLeft = '1px solid var(--border-color)';
+    runCoderPreview();
+  }
+}
+
+function runCoderPreview() {
+  const textarea = document.getElementById('coderTextarea');
+  const iframe = document.getElementById('coderIframe');
+  const previewWrap = document.getElementById('coderPreviewWrap');
+  if (!textarea || !iframe) return;
+  if (previewWrap && !previewWrap.classList.contains('active')) {
+    switchCoderTab('split');
+    return;
+  }
+  iframe.srcdoc = textarea.value;
+  showToast('Live preview updated', 'info');
+}
+
+function sendCodeBlockToEditor(btn) {
+  const wrapper = btn.closest('.code-block-wrapper');
+  const codeEl = wrapper?.querySelector('pre code');
+  if (!codeEl) return;
+  const textarea = document.getElementById('coderTextarea');
+  if (!textarea) return;
+  pushCoderUndo(textarea.value);
+  textarea.value = codeEl.textContent;
+  localStorage.setItem('aiHub_coderContent', textarea.value);
+  runCoderSearch(false);
+  updateCoderLineNumbers();
+  if (!state.coderOpen) toggleCoderPanel();
+  showToast('Code loaded into Coder Studio', 'success');
+}
+
+function openFileInCoder(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const textarea = document.getElementById('coderTextarea');
+    const filenameInput = document.getElementById('coderFilename');
+    if (textarea) {
+      pushCoderUndo(textarea.value);
+      textarea.value = e.target.result;
+      localStorage.setItem('aiHub_coderContent', textarea.value);
+      runCoderSearch(false);
+      updateCoderLineNumbers();
+    }
+    if (filenameInput) {
+      filenameInput.value = file.name;
+      localStorage.setItem('aiHub_coderFilename', file.name);
+    }
+    showToast(`Opened "${file.name}" in Coder Studio`, 'success');
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function loadSelfIntoCoder() {
+  const textarea = document.getElementById('coderTextarea');
+  const filenameInput = document.getElementById('coderFilename');
+  if (!textarea) return;
+  pushCoderUndo(textarea.value);
+  const fullHtml = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+  textarea.value = fullHtml;
+  if (filenameInput) {
+    filenameInput.value = 'index.html';
+    localStorage.setItem('aiHub_coderFilename', 'index.html');
+  }
+  localStorage.setItem('aiHub_coderContent', fullHtml);
+  runCoderSearch(false);
+  updateCoderLineNumbers();
+  showToast('Loaded current IMPACT Workspace source into editor', 'success');
+}
+
+async function sendCoderToAI() {
+  const textarea = document.getElementById('coderTextarea');
+  const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
+  if (!textarea || !textarea.value.trim()) {
+    showToast('Coder editor is empty', 'info');
+    return;
+  }
+  const codeText = textarea.value;
+  const fakeFile = { name: filename, type: 'text/plain', size: new Blob([codeText]).size };
+  const savedDoc = storeDocumentInMemory(fakeFile, codeText);
+  const att = await addPendingAttachment(fakeFile, codeText, savedDoc?.id);
+  state.pendingAttachments.push(att);
+  renderPendingAttachments();
+  document.getElementById('userInput')?.focus();
+  showToast(`Attached "${filename}" from Coder Studio to chat`, 'success');
+}
+
+function copyCoderContent() {
+  const textarea = document.getElementById('coderTextarea');
+  if (!textarea) return;
+  navigator.clipboard.writeText(textarea.value).then(() => {
+    showToast('Copied editor code to clipboard', 'success');
+  });
+}
+
+function downloadCoderFile() {
+  const textarea = document.getElementById('coderTextarea');
+  const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
+  if (!textarea) return;
+  const blob = new Blob([textarea.value], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast(`Saved "${filename}"`, 'success');
 }
 
 function stopGeneration() { if(state.abortController) state.abortController.abort(); }

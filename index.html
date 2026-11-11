@@ -3,10 +3,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0a0a0f">
+<meta name="theme-color" content="#0a0a0f" id="themeColorMeta">
 <meta name="apple-mobile-web-app-title" content="IMPACT Workspace">
-<link rel="manifest" href="manifest.json">
+<meta name="application-name" content="IMPACT Workspace">
+<link rel="manifest" href='data:application/manifest+json,{"name":"IMPACT Workspace","short_name":"IMPACT","start_url":"./","display":"standalone","display_override":["fullscreen","standalone"],"background_color":"#0a0a0f","theme_color":"#0a0a0f","orientation":"any"}'>
 <link rel="apple-touch-icon" sizes="180x180" href="impact-icon.png">
 <title>IMPACT Workspace</title>
 <style>
@@ -366,18 +368,30 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-  html { background-color: #0a0a0f; }
+  html {
+    background-color: #0a0a0f;
+    height: 100%;
+    height: -webkit-fill-available;
+    overscroll-behavior: none;
+  }
 
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--gradient-bg);
     color: var(--text-primary);
+    width: 100vw;
     height: 100vh;
     height: 100dvh;
+    min-height: -webkit-fill-available;
     overflow: hidden;
+    overscroll-behavior: none;
+    position: fixed;
+    inset: 0;
     display: flex;
     transition: background 0.4s ease, color 0.3s ease;
     padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 
   .ico {
@@ -1616,6 +1630,9 @@
 
       <button class="topbar-btn" onclick="openMemoryManager()" title="Memory &amp; Knowledge Base">
         <svg class="ico" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+      </button>
+      <button class="topbar-btn" id="fullscreenBtn" onclick="toggleAppFullscreen()" title="Toggle Fullscreen (Hide Browser Toolbar)">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
       </button>
       <button class="topbar-btn" onclick="openSettings()" title="Advanced Settings">
         <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -4109,7 +4126,34 @@ function setTheme(themeId) {
   document.querySelectorAll('.theme-btn').forEach(btn =&gt; btn.classList.toggle('active', btn.dataset.theme===themeId));
 }
 
-function applyTheme(themeId) { document.body.setAttribute('data-theme', themeId); }
+function applyTheme(themeId) {
+  document.body.setAttribute('data-theme', themeId);
+  requestAnimationFrame(() => {
+    const bg = getComputedStyle(document.body).getPropertyValue('--bg-secondary').trim() || '#0a0a0f';
+    const meta = document.getElementById('themeColorMeta') || document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', bg);
+  });
+}
+
+function toggleAppFullscreen() {
+  const doc = window.document;
+  const docEl = doc.documentElement;
+  const requestFull = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+  const exitFull = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+  const isFull = doc.fullscreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement;
+
+  if (!isFull) {
+    if (requestFull) {
+      requestFull.call(docEl).catch(() => {
+        showToast('Use "Add to Home Screen" in Share menu for full-screen on iOS', 'info');
+      });
+    } else {
+      showToast('On iPhone/iPad: tap Share -> "Add to Home Screen" to hide toolbar', 'info');
+    }
+  } else if (exitFull) {
+    exitFull.call(doc);
+  }
+}
 
 function populateModalThemeGrid() {
   const modalThemeDefs = [
@@ -6908,7 +6952,48 @@ function setTheme(themeId) {
   document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.theme===themeId));
 }
 
-function applyTheme(themeId) { document.body.setAttribute('data-theme', themeId); }
+function applyTheme(themeId) {
+  document.body.setAttribute('data-theme', themeId);
+  requestAnimationFrame(() => {
+    const bg = getComputedStyle(document.body).getPropertyValue('--bg-secondary').trim() || '#0a0a0f';
+    const meta = document.getElementById('themeColorMeta') || document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', bg);
+  });
+}
+
+function toggleAppFullscreen() {
+  const doc = window.document;
+  const docEl = doc.documentElement;
+  const isFull = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
+
+  if (!isFull) {
+    const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+    if (req) {
+      Promise.resolve(req.call(docEl)).catch(err => {
+        showToast('Fullscreen blocked: ' + err.message, 'error');
+      });
+    } else {
+      showToast('For iOS/iPadOS: Tap Share -> Add to Home Screen', 'info');
+    }
+  } else {
+    const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+    if (exit) Promise.resolve(exit.call(doc)).catch(() => {});
+  }
+}
+
+function syncFullscreenButtonUI() {
+  const btn = document.getElementById('fullscreenBtn');
+  if (!btn) return;
+  const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+  btn.classList.toggle('active-coder', isFull);
+  btn.title = isFull ? 'Exit Fullscreen (Esc)' : 'Toggle Fullscreen (Hide Browser Toolbar)';
+  btn.innerHTML = isFull
+    ? '<svg class="ico" viewBox="0 0 24 24"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>'
+    : '<svg class="ico" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>';
+}
+
+document.addEventListener('fullscreenchange', syncFullscreenButtonUI);
+document.addEventListener('webkitfullscreenchange', syncFullscreenButtonUI);
 
 function populateModalThemeGrid() {
   const modalThemeDefs = [

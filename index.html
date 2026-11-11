@@ -4235,7 +4235,11 @@ function openFileInCoder(event) {
       filenameInput.value = file.name;
       localStorage.setItem('aiHub_coderFilename', file.name);
     }
-    showToast(`Opened "${file.name}" in Coder Studio`, 'success');
+    
+    // Also load into Memory & Knowledge Base
+    storeDocumentInMemory(file, e.target.result);
+    
+    showToast(`Opened "${file.name}" in Coder Studio & added to knowledge base`, 'success');
   };
   reader.readAsText(file);
   event.target.value = '';
@@ -4246,16 +4250,66 @@ function loadSelfIntoCoder() {
   const filenameInput = document.getElementById('coderFilename');
   if (!textarea) return;
   pushCoderUndo(textarea.value);
-  const fullHtml = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-  textarea.value = fullHtml;
-  if (filenameInput) {
-    filenameInput.value = 'index.html';
-    localStorage.setItem('aiHub_coderFilename', 'index.html');
-  }
-  localStorage.setItem('aiHub_coderContent', fullHtml);
-  runCoderSearch(false);
-  updateCoderLineNumbers();
-  showToast('Loaded current IMPACT Workspace source into editor', 'success');
+  
+  // Get the actual HTML file content using a different approach
+  fetch(window.location.href, { 
+    method: 'GET',
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.text();
+    })
+    .then(htmlContent => {
+      // Ensure we have proper HTML content
+      if (typeof htmlContent === 'string' && htmlContent.trim().length > 0) {
+        textarea.value = htmlContent;
+        if (filenameInput) {
+          filenameInput.value = 'index.html';
+          localStorage.setItem('aiHub_coderFilename', 'index.html');
+        }
+        localStorage.setItem('aiHub_coderContent', htmlContent);
+        runCoderSearch(false);
+        updateCoderLineNumbers();
+        
+        // Also load into Memory & Knowledge Base
+        const fakeFile = new File([htmlContent], 'index.html', { type: 'text/html' });
+        storeDocumentInMemory(fakeFile, htmlContent);
+        
+        showToast('Loaded current IMPACT Workspace source into editor & memory', 'success');
+      } else {
+        throw new Error('Empty or invalid HTML content received');
+      }
+    })
+    .catch(error => {
+      console.error('Error loading HTML file:', error);
+      // Fallback to document.documentElement.outerHTML if fetch fails
+      try {
+        const fullHtml = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+        textarea.value = fullHtml;
+        if (filenameInput) {
+          filenameInput.value = 'index.html';
+          localStorage.setItem('aiHub_coderFilename', 'index.html');
+        }
+        localStorage.setItem('aiHub_coderContent', fullHtml);
+        runCoderSearch(false);
+        updateCoderLineNumbers();
+        
+        // Also load into Memory & Knowledge Base using fallback content
+        const fakeFile = new File([fullHtml], 'index.html', { type: 'text/html' });
+        storeDocumentInMemory(fakeFile, fullHtml);
+        
+        showToast('Loaded current page into editor & memory (fallback method)', 'success');
+      } catch (fallbackError) {
+        showToast('Failed to load HTML content: ' + error.message, 'error');
+      }
+    });
 }
 
 async function sendCoderToAI() {
@@ -4287,6 +4341,14 @@ function downloadCoderFile() {
   const textarea = document.getElementById('coderTextarea');
   const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
   if (!textarea) return;
+  
+  let content = textarea.value;
+  if (filename.endsWith('.html') || filename.endsWith('.htm')) {
+    if (!content.trim().startsWith('<!DOCTYPE')) {
+      content = '<!DOCTYPE html>\n' + content;
+    }
+  }
+  
   const blob = new Blob([textarea.value], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

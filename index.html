@@ -9146,7 +9146,7 @@ function downloadBlob(blob, filename) {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 100);
-  showToast(`Downloaded ${filename}`, 'success');
+  showToast(`Downloading ${filename}`, 'success');
 }
 
 // Function to create a simple PowerPoint-like HTML presentation

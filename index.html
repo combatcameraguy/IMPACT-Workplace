@@ -8873,69 +8873,72 @@ function openFileInCoder(event) {
   event.target.value = '';
 }
 
+function sanitizeSelfHtml(rawHtml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(rawHtml, 'text/html');
+
+  // Strip duplicated editor backdrop, line numbers, and textarea value
+  const backdrop = doc.getElementById('coderBackdrop');
+  if (backdrop) backdrop.innerHTML = '';
+  const lineNums = doc.getElementById('coderLineNumbers');
+  if (lineNums) lineNums.innerHTML = '1';
+  const textarea = doc.getElementById('coderTextarea');
+  if (textarea) textarea.textContent = '';
+
+  // Strip runtime-rendered lists so saved source stays clean
+  const idsToClear = ['chatList', 'messagesContainer', 'docsList', 'toastContainer', 'pendingAttachmentBar'];
+  idsToClear.forEach(id => {
+    const el = doc.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+
+  return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+}
+
 function loadSelfIntoCoder() {
   const textarea = document.getElementById('coderTextarea');
   const filenameInput = document.getElementById('coderFilename');
   if (!textarea) return;
   pushCoderUndo(textarea.value);
-  
-  // Get the actual HTML file content using a different approach
-  fetch(window.location.href, { 
-    method: 'GET',
-    headers: {
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+
+  const applyLoadedHtml = (rawHtml, methodLabel) => {
+    const cleanHtml = sanitizeSelfHtml(rawHtml);
+    textarea.value = cleanHtml;
+    if (filenameInput) {
+      filenameInput.value = 'index.html';
+      localStorage.setItem('aiHub_coderFilename', 'index.html');
     }
+    localStorage.setItem('aiHub_coderContent', cleanHtml);
+    runCoderSearch(false);
+    updateCoderLineNumbers();
+    updateSyntaxHighlighting();
+
+    const fakeFile = new File([cleanHtml], 'index.html', { type: 'text/html' });
+    storeDocumentInMemory(fakeFile, cleanHtml);
+    showToast(`Loaded clean IMPACT Workspace source (${methodLabel})`, 'success');
+  };
+
+  fetch(window.location.href, {
+    method: 'GET',
+    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'Expires': '0' }
   })
     .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return response.text();
     })
     .then(htmlContent => {
-      // Ensure we have proper HTML content
       if (typeof htmlContent === 'string' && htmlContent.trim().length > 0) {
-        textarea.value = htmlContent;
-        if (filenameInput) {
-          filenameInput.value = 'index.html';
-          localStorage.setItem('aiHub_coderFilename', 'index.html');
-        }
-        localStorage.setItem('aiHub_coderContent', htmlContent);
-        runCoderSearch(false);
-        updateCoderLineNumbers();
-        
-        // Also load into Memory & Knowledge Base
-        const fakeFile = new File([htmlContent], 'index.html', { type: 'text/html' });
-        storeDocumentInMemory(fakeFile, htmlContent);
-        
-        showToast('Loaded current IMPACT Workspace source into editor & memory', 'success');
+        applyLoadedHtml(htmlContent, 'server');
       } else {
-        throw new Error('Empty or invalid HTML content received');
+        throw new Error('Empty HTML content');
       }
     })
-    .catch(error => {
-      console.error('Error loading HTML file:', error);
-      // Fallback to document.documentElement.outerHTML if fetch fails
+    .catch(() => {
       try {
         const fullHtml = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-        textarea.value = fullHtml;
-        if (filenameInput) {
-          filenameInput.value = 'index.html';
-          localStorage.setItem('aiHub_coderFilename', 'index.html');
-        }
-        localStorage.setItem('aiHub_coderContent', fullHtml);
-        runCoderSearch(false);
-        updateCoderLineNumbers();
-        
-        // Also load into Memory & Knowledge Base using fallback content
-        const fakeFile = new File([fullHtml], 'index.html', { type: 'text/html' });
-        storeDocumentInMemory(fakeFile, fullHtml);
-        
-        showToast('Loaded current page into editor & memory (fallback method)', 'success');
+        applyLoadedHtml(fullHtml, 'desktop DOM');
       } catch (fallbackError) {
-        showToast('Failed to load HTML content: ' + error.message, 'error');
+        showToast('Failed to load HTML content: ' + fallbackError.message, 'error');
       }
     });
 }

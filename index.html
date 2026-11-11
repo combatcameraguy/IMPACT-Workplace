@@ -5563,8 +5563,7 @@ function undoCoderEdit() {
 }
 
 function initCoderStudio() {
-  state.coderOpen = false;
-  localStorage.setItem('aiHub_coderOpen', 'false');
+  state.coderOpen = localStorage.getItem('aiHub_coderOpen') === 'true';
   const savedCode = localStorage.getItem('aiHub_coderContent') || '';
   const savedName = localStorage.getItem('aiHub_coderFilename') || 'index.html';
   const savedWidth = localStorage.getItem('aiHub_coderWidth');
@@ -5579,13 +5578,13 @@ function initCoderStudio() {
   if (savedWidth && panel) panel.style.width = savedWidth + 'px';
   if (textarea) textarea.value = savedCode;
   if (filenameInput) filenameInput.value = savedName;
-  if (panel) {
-    panel.classList.add('collapsed');
-    toggleBtn?.classList.remove('active-coder');
+  if (state.coderOpen && panel) {
+    panel.classList.remove('collapsed');
+    toggleBtn?.classList.add('active-coder');
   }
   const toggleBtnLabel = document.getElementById('coderToggleBtnLabel');
   if (toggleBtnLabel) {
-    toggleBtnLabel.textContent = 'Open Right Coder Studio';
+    toggleBtnLabel.textContent = state.coderOpen ? 'Close Right Coder Studio' : 'Open Right Coder Studio';
   }
   updateCoderLineNumbers();
   renderCoderBackdrop();
@@ -8354,7 +8353,8 @@ function undoCoderEdit() {
 }
 
 function initCoderStudio() {
-  state.coderOpen = localStorage.getItem('aiHub_coderOpen') === 'true';
+  state.coderOpen = false;
+  localStorage.setItem('aiHub_coderOpen', 'false');
   const savedCode = localStorage.getItem('aiHub_coderContent') || '';
   const savedName = localStorage.getItem('aiHub_coderFilename') || 'index.html';
   const savedWidth = localStorage.getItem('aiHub_coderWidth');
@@ -8369,13 +8369,13 @@ function initCoderStudio() {
   if (savedWidth && panel) panel.style.width = savedWidth + 'px';
   if (textarea) textarea.value = savedCode;
   if (filenameInput) filenameInput.value = savedName;
-  if (state.coderOpen && panel) {
-    panel.classList.remove('collapsed');
-    toggleBtn?.classList.add('active-coder');
+  if (panel) {
+    panel.classList.add('collapsed');
+    toggleBtn?.classList.remove('active-coder');
   }
   const toggleBtnLabel = document.getElementById('coderToggleBtnLabel');
   if (toggleBtnLabel) {
-    toggleBtnLabel.textContent = state.coderOpen ? 'Close Right Coder Studio' : 'Open Right Coder Studio';
+    toggleBtnLabel.textContent = 'Open Right Coder Studio';
   }
   updateCoderLineNumbers();
   renderCoderBackdrop();
@@ -9491,4 +9491,5 @@ function createSampleDocument(type) {
 </script>
 
 
-</body></html>
+</body>
+</html>

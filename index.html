@@ -1211,9 +1211,26 @@
     background: rgba(0, 206, 201, 0.36);
     outline: 2px solid var(--accent-green);
     box-shadow: 0 0 14px var(--accent-green-glow);
-    color: transparent;
+    color: inherit;
     border-radius: 2px;
   }
+  .coder-backdrop {
+    color: var(--text-primary);
+  }
+  .coder-backdrop mark.code-find-match {
+    color: inherit;
+  }
+  .coder-backdrop .cm-keyword { color: #ff79c6; font-weight: 600; }
+  .coder-backdrop .cm-string { color: #50fa7b; }
+  .coder-backdrop .cm-comment { color: var(--text-muted); font-style: italic; }
+  .coder-backdrop .cm-number { color: #bd93f9; }
+  .coder-backdrop .cm-atom { color: #ffb86c; }
+  .coder-backdrop .cm-tag { color: #ff79c6; }
+  .coder-backdrop .cm-attr { color: #50fa7b; }
+  .coder-backdrop .cm-selector { color: #8be9fd; }
+  .coder-backdrop .cm-property { color: #66d9ef; }
+  .coder-backdrop .cm-value { color: #f1fa8c; }
+  .coder-backdrop .cm-bracket { color: var(--accent-secondary); }
   .coder-textarea {
     position: absolute;
     inset: 0;
@@ -1222,7 +1239,8 @@
     padding: 14px;
     background: transparent;
     border: none;
-    color: var(--text-primary);
+    color: transparent;
+    -webkit-text-fill-color: transparent;
     caret-color: var(--accent-primary);
     font-family: 'JetBrains Mono', monospace;
     font-size: 13px;
@@ -5801,32 +5819,76 @@ function updateMatchBadge() {
   }
 }
 
-function renderCoderBackdrop() {
-  const textarea = document.getElementById('coderTextarea');
-  const backdrop = document.getElementById('coderBackdrop');
-  if (!textarea || !backdrop) return;
+function highlightCodeSegment(rawSegment, language) {
+  if (!rawSegment) return '';
+  const escaped = escapeHtml(rawSegment);
 
-  const code = textarea.value || '';
-  if (coderSearchMatches.length === 0) {
-    backdrop.innerHTML = escapeHtml(code) + '\n';
-    return;
+  if (language === 'html') {
+    return escaped.replace(
+      /(&lt;!--[\s\S]*?--&gt;)|(&lt;\/?[a-zA-Z0-9\-]+)|(\s[a-zA-Z\-:]+=)("[^"]*"|'[^']*')|(&gt;)/g,
+      (match, comment, tag, attr, str, closeTag) => {
+        if (comment) return `<span class="cm-comment">${comment}</span>`;
+        if (tag) return `<span class="cm-tag">${tag}</span>`;
+        if (attr) return `<span class="cm-attr">${attr}</span><span class="cm-string">${str}</span>`;
+        if (closeTag) return `<span class="cm-tag">${closeTag}</span>`;
+        return match;
+      }
+    );
   }
-
-  let html = '';
-  let lastIndex = 0;
-  coderSearchMatches.forEach((m, idx) => {
-    html += escapeHtml(code.slice(lastIndex, m.start));
-    const cls = idx === coderActiveMatchIdx ? 'code-find-match code-find-active' : 'code-find-match';
-    html += `<mark class="${cls}">${escapeHtml(code.slice(m.start, m.end))}</mark>`;
-    lastIndex = m.end;
-  });
-  html += escapeHtml(code.slice(lastIndex)) + '\n';
-  backdrop.innerHTML = html;
-  backdrop.scrollTop = textarea.scrollTop;
-  backdrop.scrollLeft = textarea.scrollLeft;
+  if (language === 'css') {
+    return escaped.replace(
+      /(\/\*[\s\S]*?\*\/)|([.#][a-zA-Z0-9\-_]+)|(\{|\})|([a-zA-Z\-]+)(\s*:\s*)([^;{}\n]+)/g,
+      (match, comment, selector, bracket, prop, colon, val) => {
+        if (comment) return `<span class="cm-comment">${comment}</span>`;
+        if (selector) return `<span class="cm-selector">${selector}</span>`;
+        if (bracket) return `<span class="cm-bracket">${bracket}</span>`;
+        if (prop) return `<span class="cm-property">${prop}</span>${colon}<span class="cm-value">${val}</span>`;
+        return match;
+      }
+    );
+  }
+  if (language === 'javascript') {
+    return escaped.replace(
+      /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|('[^'\n]*'|"[^"\n]*"|`[\s\S]*?`)|\b(function|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|var|let|const|class|extends|import|export|default|from|as|async|await|new|typeof|instanceof)\b|\b(true|false|null|undefined|NaN|Infinity)\b|\b([0-9]+(?:\.[0-9]+)?)\b|(\.[a-zA-Z_$][a-zA-Z0-9_$]*)/g,
+      (match, comment, str, kw, atom, num, prop) => {
+        if (comment) return `<span class="cm-comment">${comment}</span>`;
+        if (str) return `<span class="cm-string">${str}</span>`;
+        if (kw) return `<span class="cm-keyword">${kw}</span>`;
+        if (atom) return `<span class="cm-atom">${atom}</span>`;
+        if (num) return `<span class="cm-number">${num}</span>`;
+        if (prop) return `<span class="cm-property">${prop}</span>`;
+        return match;
+      }
+    );
+  }
+  if (language === 'python') {
+    return escaped.replace(
+      /(#[^\n]*)|('''[\s\S]*?'''|"""[\s\S]*?"""|'[^'\n]*'|"[^"\n]*")|\b(def|class|if|elif|else|for|while|try|except|finally|with|import|from|as|return|yield|lambda|and|or|not|in|is|assert|break|continue|del|global|nonlocal|pass| print|raise|async|await)\b|\b(True|False|None)\b|\b([0-9]+(?:\.[0-9]+)?)\b/g,
+      (match, comment, str, kw, atom, num) => {
+        if (comment) return `<span class="cm-comment">${comment}</span>`;
+        if (str) return `<span class="cm-string">${str}</span>`;
+        if (kw) return `<span class="cm-keyword">${kw}</span>`;
+        if (atom) return `<span class="cm-atom">${atom}</span>`;
+        if (num) return `<span class="cm-number">${num}</span>`;
+        return match;
+      }
+    );
+  }
+  if (language === 'json') {
+    return escaped.replace(
+      /("[^"\n]*"\s*:)|("[^"\n]*")|\b(true|false|null)\b|\b(-?[0-9]+(?:\.[0-9]+)?)\b/g,
+      (match, key, str, atom, num) => {
+        if (key) return `<span class="cm-property">${key}</span>`;
+        if (str) return `<span class="cm-string">${str}</span>`;
+        if (atom) return `<span class="cm-atom">${atom}</span>`;
+        if (num) return `<span class="cm-number">${num}</span>`;
+        return match;
+      }
+    );
+  }
+  return escaped;
 }
 
-// Add syntax highlighting functionality
 function updateSyntaxHighlighting() {
   const textarea = document.getElementById('coderTextarea');
   const backdrop = document.getElementById('coderBackdrop');
@@ -5835,78 +5897,35 @@ function updateSyntaxHighlighting() {
 
   const code = textarea.value || '';
   const extension = filename.split('.').pop()?.toLowerCase();
-  
-  // Simple language detection based on file extension
+
   let language = 'plaintext';
   if (extension === 'html' || extension === 'htm') language = 'html';
   else if (extension === 'css') language = 'css';
-  else if (extension === 'js' || extension === 'jsx') language = 'javascript';
+  else if (extension === 'js' || extension === 'jsx' || extension === 'ts' || extension === 'tsx') language = 'javascript';
   else if (extension === 'py') language = 'python';
   else if (extension === 'json') language = 'json';
-  else if (extension === 'md') language = 'markdown';
 
-  // Apply basic syntax highlighting based on language
-  let highlightedCode = escapeHtml(code);
-  
-  if (language === 'html') {
-    highlightedCode = highlightedCode
-      .replace(/(&lt;\/?[a-zA-Z0-9\-]+)/g, '<span class="cm-tag">$1</span>') // Tags
-      .replace(/(&gt;)/g, '<span class="cm-tag">$1</span>')
-      .replace(/(\s[a-zA-Z\-]+=)(&quot;[^&]*&quot;)/g, '<span class="cm-attr">$1</span><span class="cm-string">$2</span>') // Attributes
-      .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="cm-comment">$1</span>'); // Comments
-  } 
-  else if (language === 'css') {
-    highlightedCode = highlightedCode
-      .replace(/([.#][a-zA-Z0-9\-_]+)/g, '<span class="cm-selector">$1</span>') // Selectors
-      .replace(/(\{|\})/g, '<span class="cm-bracket">$1</span>') // Brackets
-      .replace(/([^:;{}]+):([^;]*);/g, '<span class="cm-property">$1</span>:<span class="cm-value">$2</span>;') // Properties/values
-      .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="cm-comment">$1</span>'); // Comments
-  }
-  else if (language === 'javascript') {
-    highlightedCode = highlightedCode
-      .replace(/\b(function|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|var|let|const|class|extends|import|export|default|from|as)\b/g, '<span class="cm-keyword">$1</span>') // Keywords
-      .replace(/\b(true|false|null|undefined|NaN|Infinity)\b/g, '<span class="cm-atom">$1</span>') // Atoms
-      .replace(/(\.[a-zA-Z0-9_]+)/g, '<span class="cm-property">$1</span>') // Properties
-      .replace(/('[^']*'|"[^"]*")/g, '<span class="cm-string">$1</span>') // Strings
-      .replace(/(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, '<span class="cm-comment">$1</span>') // Comments
-      .replace(/\b([0-9]+(?:\.[0-9]+)?)\b/g, '<span class="cm-number">$1</span>'); // Numbers
-  }
-  else if (language === 'python') {
-    highlightedCode = highlightedCode
-      .replace(/\b(def|class|if|elif|else|for|while|try|except|finally|with|import|from|as|return|yield|lambda|and|or|not|in|is|assert|break|continue|del|exec|global|nonlocal|pass|print|raise|yield)\b/g, '<span class="cm-keyword">$1</span>') // Keywords
-      .replace(/('[^']*'|"[^"]*"|'''[\s\S]*?'''|"""[\s\S]*?""")/g, '<span class="cm-string">$1</span>') // Strings
-      .replace(/(#[^\n]*)/g, '<span class="cm-comment">$1</span>') // Comments
-      .replace(/\b(True|False|None)\b/g, '<span class="cm-atom">$1</span>') // Atoms
-      .replace(/\b([0-9]+(?:\.[0-9]+)?)\b/g, '<span class="cm-number">$1</span>'); // Numbers
-  }
-  else if (language === 'json') {
-    highlightedCode = highlightedCode
-      .replace(/("[^"]*":)/g, '<span class="cm-property">$1</span>') // Keys
-      .replace(/(true|false|null)\b/g, '<span class="cm-atom">$1</span>') // Atoms
-      .replace(/("[^"]*")/g, '<span class="cm-string">$1</span>') // Strings
-      .replace(/\b([0-9]+(?:\.[0-9]+)?)\b/g, '<span class="cm-number">$1</span>'); // Numbers
-  }
-
-  // Add search match highlighting on top of syntax highlighting
-  if (coderSearchMatches.length > 0) {
+  if (coderSearchMatches.length === 0) {
+    backdrop.innerHTML = highlightCodeSegment(code, language) + '\n';
+  } else {
     let finalHtml = '';
     let lastIndex = 0;
     coderSearchMatches.forEach((m, idx) => {
-      // Add syntax highlighted code before the match
-      finalHtml += highlightedCode.slice(lastIndex, m.start);
-      // Add the matched text with search highlight
+      finalHtml += highlightCodeSegment(code.slice(lastIndex, m.start), language);
       const cls = idx === coderActiveMatchIdx ? 'code-find-match code-find-active' : 'code-find-match';
-      finalHtml += `<mark class="${cls}">${highlightedCode.slice(m.start, m.end)}</mark>`;
+      finalHtml += `<mark class="${cls}">${highlightCodeSegment(code.slice(m.start, m.end), language)}</mark>`;
       lastIndex = m.end;
     });
-    finalHtml += highlightedCode.slice(lastIndex) + '\n';
+    finalHtml += highlightCodeSegment(code.slice(lastIndex), language) + '\n';
     backdrop.innerHTML = finalHtml;
-  } else {
-    backdrop.innerHTML = highlightedCode + '\n';
   }
-  
+
   backdrop.scrollTop = textarea.scrollTop;
   backdrop.scrollLeft = textarea.scrollLeft;
+}
+
+function renderCoderBackdrop() {
+  updateSyntaxHighlighting();
 }
 
 function replaceActiveCoderMatch() {

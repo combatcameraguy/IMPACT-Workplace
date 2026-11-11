@@ -6264,9 +6264,16 @@ function loadSelfIntoCoder() {
     })
     .catch(error =&gt; {
       console.error('Error loading HTML file:', error);
-      // Fallback to document.documentElement.outerHTML if fetch fails
+      // Fallback to clean cloned DOM (strips baked-in coderBackdrop & line numbers)
       try {
-        const fullHtml = '&lt;!DOCTYPE html&gt;\n' + document.documentElement.outerHTML;
+        const cloneDoc = document.documentElement.cloneNode(true);
+        const bd = cloneDoc.querySelector('#coderBackdrop');
+        if (bd) bd.innerHTML = '';
+        const ln = cloneDoc.querySelector('#coderLineNumbers');
+        if (ln) ln.innerHTML = '1';
+        const ta = cloneDoc.querySelector('#coderTextarea');
+        if (ta) ta.innerHTML = '';
+        const fullHtml = '<!DOCTYPE html>\n' + cloneDoc.outerHTML;
         textarea.value = fullHtml;
         if (filenameInput) {
           filenameInput.value = 'index.html';
@@ -6316,8 +6323,13 @@ function downloadCoderFile() {
   const textarea = document.getElementById('coderTextarea');
   const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
   if (!textarea) return;
-  
-  let content = textarea.value;
+
+  let content = textarea.value
+    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
+    .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '')
+    .replace(/<div class="coder-line-numbers" id="coderLineNumbers">[\s\S]*?<\/div>/, '<div class="coder-line-numbers" id="coderLineNumbers">1</div>')
+    .replace(/<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true">[\s\S]*?<\/pre>/, '<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true"></pre>');
+
   if (filename.endsWith('.html') || filename.endsWith('.htm')) {
     if (!content.trim().toLowerCase().startsWith('<!doctype')) {
       content = '<!DOCTYPE html>\n' + content;
@@ -6329,22 +6341,10 @@ function downloadCoderFile() {
   else if (filename.endsWith('.html') || filename.endsWith('.htm')) mimeType = 'text/html;charset=utf-8';
   else if (filename.endsWith('.js')) mimeType = 'application/javascript;charset=utf-8';
   else if (filename.endsWith('.css')) mimeType = 'text/css;charset=utf-8';
+  else if (filename.endsWith('.py')) mimeType = 'text/x-python;charset=utf-8';
+  else if (filename.endsWith('.md')) mimeType = 'text/markdown;charset=utf-8';
 
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 60000);
-
-  showToast(`Saved "${filename}"`, 'success');
+  saveOrDownloadFile(content, filename, mimeType);
 }
 
 function stopGeneration() { if(state.abortController) state.abortController.abort(); }
@@ -8370,7 +8370,7 @@ function formatMessage(text) {
     const sendToReplaceBtn = `<button class="code-copy-btn" onclick="sendCodeBlockToFinder(this, 'replace')" title="Send this block to Replacement box (PASTE block)"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg><span>To Replace</span></button>`;
     const sendToCoderBtn = `<button class="code-copy-btn" onclick="sendCodeBlockToEditor(this)" title="Replace full editor content with this code block"><svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg><span>To Editor</span></button>`;
     const actionBtns = `${sendToFindBtn}${sendToReplaceBtn}${sendToCoderBtn}<button class="code-copy-btn" onclick="copyCodeBlock(this)" title="Copy Code">${copySvgIcon}<span>Copy</span></button>`;
-    return `<div class="code-block-wrapper"><div class="code-block-header"><span>${safeLang}</span><div style="display:flex;gap:6px;flex-wrap:wrap;">${actionBtns}</div></div><pre><code>${safeCode}</code></pre><div class="code-block-footer"><div style="display:flex;gap:6px;flex-wrap:wrap;">${actionBtns}</div></div></div>`;
+    return `<div class="code-block-wrapper"><div class="code-block-header" style="user-select:none;-webkit-user-select:none;" contenteditable="false"><span>${safeLang}</span><div style="display:flex;gap:6px;flex-wrap:wrap;">${actionBtns}</div></div><pre><code>${safeCode}</code></pre></div>`;
   });
 
   return html;
@@ -8973,6 +8973,13 @@ function runCoderPreview() {
   showToast('Live preview updated', 'info');
 }
 
+function stripCodeBlockUIArtifacts(raw) {
+  if (!raw) return '';
+  return raw
+    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
+    .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '');
+}
+
 function sendCodeBlockToEditor(btn) {
   const wrapper = btn.closest('.code-block-wrapper');
   const codeEl = wrapper?.querySelector('pre code');
@@ -8980,10 +8987,11 @@ function sendCodeBlockToEditor(btn) {
   const textarea = document.getElementById('coderTextarea');
   if (!textarea) return;
   pushCoderUndo(textarea.value);
-  textarea.value = codeEl.textContent;
+  textarea.value = stripCodeBlockUIArtifacts(codeEl.textContent);
   localStorage.setItem('aiHub_coderContent', textarea.value);
   runCoderSearch(false);
   updateCoderLineNumbers();
+  updateSyntaxHighlighting();
   if (!state.coderOpen) toggleCoderPanel();
   showToast('Code loaded into Coder Studio', 'success');
 }
@@ -9117,8 +9125,10 @@ function downloadCoderFile() {
   if (!textarea) return;
 
   let content = textarea.value
-    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\n?/gm, '')
-    .replace(/\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '');
+    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
+    .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '')
+    .replace(/<div class="coder-line-numbers" id="coderLineNumbers">[\s\S]*?<\/div>/, '<div class="coder-line-numbers" id="coderLineNumbers">1</div>')
+    .replace(/<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true">[\s\S]*?<\/pre>/, '<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true"></pre>');
 
   if (filename.endsWith('.html') || filename.endsWith('.htm')) {
     if (!content.trim().toLowerCase().startsWith('<!doctype')) {

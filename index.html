@@ -7215,22 +7215,58 @@ function togglePinChat(id, e) {
   showToast(chat.pinned ? 'Chat pinned' : 'Chat unpinned', 'success');
 }
 
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+async function saveOrDownloadFile(content, filename, mimeType = 'text/plain;charset=utf-8') {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+  const cleanName = (filename || 'download.txt').trim();
+
+  if (isIOSDevice() && navigator.canShare) {
+    try {
+      const shareFile = new File([blob], cleanName, { type: mimeType.split(';')[0] || 'application/octet-stream' });
+      if (navigator.canShare({ files: [shareFile] })) {
+        await navigator.share({ files: [shareFile], title: cleanName });
+        showToast(`Saved "${cleanName}"`, 'success');
+        return;
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+    }
+  }
+
+  const finalBlob = isIOSDevice()
+    ? new Blob([blob], { type: 'application/octet-stream' })
+    : blob;
+
+  const url = URL.createObjectURL(finalBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cleanName;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 60000);
+
+  showToast(`Saved "${cleanName}"`, 'success');
+}
+
 function shareChat(id, e) {
   e.stopPropagation();
   const chat = state.conversations[id];
   if (!chat) return;
 
+  const safeTitle = (chat.title || 'conversation').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  const filename = `${safeTitle}_chat.json`;
   const jsonString = JSON.stringify(chat, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${chat.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_chat.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 100);
-  showToast('Chat exported successfully', 'success');
+  saveOrDownloadFile(jsonString, filename, 'application/json;charset=utf-8');
 }
 
 function triggerImportChat() {
@@ -8036,11 +8072,27 @@ function deleteMemoryDoc(id) {
   showToast('Document removed from knowledge base', 'info');
 }
 
+function getCleanMessageText(messageTextEl, codeOnly = false) {
+  if (!messageTextEl) return '';
+  const clone = messageTextEl.cloneNode(true);
+  clone.querySelectorAll('.code-block-header, .code-block-footer, .web-sources-box, .inline-edit-actions').forEach(el => el.remove());
+
+  if (codeOnly) {
+    const codeBlocks = Array.from(clone.querySelectorAll('pre code'));
+    if (codeBlocks.length > 0) {
+      return codeBlocks.map(c => c.textContent).join('\n\n');
+    }
+  }
+  return clone.innerText.trim();
+}
+
 function copyResponse(btn) {
   const messageText = btn.closest('.message-content').querySelector('.message-text');
-  navigator.clipboard.writeText(messageText.innerText).then(() => {
+  const cleanText = getCleanMessageText(messageText, state.agentMode === 'coder_agent');
+  navigator.clipboard.writeText(cleanText).then(() => {
     btn.innerHTML = checkSvgIcon;
     setTimeout(() => btn.innerHTML = copySvgIcon, 2000);
+    showToast('Copied clean output to clipboard', 'success');
   });
 }
 
@@ -9063,8 +9115,11 @@ function downloadCoderFile() {
   const textarea = document.getElementById('coderTextarea');
   const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
   if (!textarea) return;
-  
-  let content = textarea.value;
+
+  let content = textarea.value
+    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\n?/gm, '')
+    .replace(/\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '');
+
   if (filename.endsWith('.html') || filename.endsWith('.htm')) {
     if (!content.trim().toLowerCase().startsWith('<!doctype')) {
       content = '<!DOCTYPE html>\n' + content;
@@ -9076,22 +9131,78 @@ function downloadCoderFile() {
   else if (filename.endsWith('.html') || filename.endsWith('.htm')) mimeType = 'text/html;charset=utf-8';
   else if (filename.endsWith('.js')) mimeType = 'application/javascript;charset=utf-8';
   else if (filename.endsWith('.css')) mimeType = 'text/css;charset=utf-8';
+  else if (filename.endsWith('.py')) mimeType = 'text/x-python;charset=utf-8';
+  else if (filename.endsWith('.md')) mimeType = 'text/markdown;charset=utf-8';
 
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
+  saveOrDownloadFile(content, filename, mimeType);
+}
 
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 60000);
+function getActiveDocumentSourceText() {
+  const assistantMsgs = document.querySelectorAll('#messagesContainer .message.assistant .message-text');
+  if (assistantMsgs.length > 0) {
+    const lastMsg = assistantMsgs[assistantMsgs.length - 1];
+    const cleaned = getCleanMessageText(lastMsg, false);
+    if (cleaned) return cleaned;
+  }
+  const coderVal = document.getElementById('coderTextarea')?.value?.trim();
+  if (coderVal) return coderVal;
+  const inputVal = document.getElementById('userInput')?.value?.trim();
+  if (inputVal) return inputVal;
+  return 'IMPACT Workspace Document\n\nGenerated on ' + new Date().toLocaleString();
+}
 
-  showToast(`Saved "${filename}"`, 'success');
+async function createSampleDocument(type) {
+  const rawText = getActiveDocumentSourceText();
+  const chatTitle = (state.currentChatId && state.conversations[state.currentChatId]?.title) || 'IMPACT_Document';
+  const baseName = chatTitle.replace(/[^a-z0-9_-]/gi, '_').replace(/_+/g, '_').substring(0, 40) || 'IMPACT_Document';
+
+  if (type === 'text') {
+    await saveOrDownloadFile(rawText, `${baseName}.txt`, 'text/plain;charset=utf-8');
+    return;
+  }
+
+  if (type === 'word') {
+    const paragraphs = rawText
+      .split(/\n{2,}/)
+      .map(p => `<p style="margin:0 0 12pt 0;line-height:1.5;font-family:Calibri,Arial,sans-serif;font-size:11pt;">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+      .join('\n');
+
+    const wordHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${escapeHtml(chatTitle)}</title></head><body style="font-family:Calibri,Arial,sans-serif;margin:1in;"><h1 style="font-size:18pt;color:#1a1a2e;border-bottom:1px solid #ccc;padding-bottom:6pt;">${escapeHtml(chatTitle)}</h1>${paragraphs}</body></html>`;
+
+    await saveOrDownloadFile('\ufeff' + wordHtml, `${baseName}.doc`, 'application/msword;charset=utf-8');
+    return;
+  }
+
+  if (type === 'presentation') {
+    const sections = rawText.split(/\n{2,}/).filter(Boolean);
+    const slides = [];
+    for (let i = 0; i < sections.length; i += 3) {
+      slides.push(sections.slice(i, i + 3));
+    }
+    if (slides.length === 0) slides.push([rawText]);
+
+    const slidesHtml = slides.map((group, idx) => `
+      <section class="slide ${idx === 0 ? 'active' : ''}">
+        <div class="slide-num">Slide ${idx + 1} / ${slides.length}</div>
+        <h2>${idx === 0 ? escapeHtml(chatTitle) : `Section ${idx + 1}`}</h2>
+        <div class="slide-body">${group.map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('')}</div>
+      </section>`).join('\n');
+
+    const deckHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${escapeHtml(chatTitle)} - Presentation</title><style>body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#0a0a0f;color:#e8e8f0;display:flex;flex-direction:column;height:100vh;overflow:hidden}.deck{flex:1;display:flex;align-items:center;justify-content:center;padding:40px}.slide{display:none;max-width:900px;width:100%;background:#16162a;border:1px solid #2a2a4a;border-radius:20px;padding:48px;box-shadow:0 12px 40px rgba(0,0,0,0.5)}.slide.active{display:block}.slide-num{font-size:12px;color:#88b7db;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}h2{margin:0 0 24px 0;font-size:32px;color:#5dade2}.slide-body p{font-size:20px;line-height:1.6;margin:0 0 16px 0}.controls{padding:16px;background:#12121a;border-top:1px solid #2a2a4a;display:flex;justify-content:center;gap:12px}button{padding:10px 20px;border-radius:8px;border:1px solid #2a2a4a;background:#1a1a2e;color:#fff;font-weight:600;cursor:pointer}button:hover{background:#2980b9}</style></head><body><div class="deck">${slidesHtml}</div><div class="controls"><button onclick="move(-1)">Previous</button><button onclick="move(1)">Next</button></div><script>let cur=0;const slides=document.querySelectorAll('.slide');function move(d){slides[cur].classList.remove('active');cur=(cur+d+slides.length)%slides.length;slides[cur].classList.add('active')}document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' ')move(1);if(e.key==='ArrowLeft')move(-1)});<\/script></body></html>`;
+
+    await saveOrDownloadFile(deckHtml, `${baseName}_Presentation.html`, 'text/html;charset=utf-8');
+    return;
+  }
+
+  if (type === 'pdf') {
+    const printWin = window.open('', '_blank');
+    if (printWin) {
+      printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(chatTitle)}</title><style>body{font-family:system-ui,-apple-system,sans-serif;padding:40px;line-height:1.6;color:#111}h1{border-bottom:1px solid #ccc;padding-bottom:8px}pre{white-space:pre-wrap;word-wrap:break-word;font-family:inherit;font-size:14px}</style></head><body><h1>${escapeHtml(chatTitle)}</h1><pre>${escapeHtml(rawText)}</pre><script>window.onload=()=>{setTimeout(()=>{window.print();},250);};<\/script></body></html>`);
+      printWin.document.close();
+    } else {
+      await saveOrDownloadFile(rawText, `${baseName}.txt`, 'text/plain;charset=utf-8');
+    }
+  }
 }
 function createSampleDocument(type) {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');

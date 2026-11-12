@@ -2595,22 +2595,7 @@ function shareChat(id, e) {
   const filename = `${safeTitle}_chat.json`;
   const jsonStr = JSON.stringify(chat, null, 2);
 
-  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 60000);
-
-  showToast('Chat exported successfully', 'success');
+  saveOrDownloadFile(jsonStr, filename, 'application/json;charset=utf-8');
 }
 
 function triggerImportChat() {
@@ -4573,19 +4558,71 @@ function downloadCoderFile() {
   else if (filename.endsWith('.py')) mimeType = 'text/x-python;charset=utf-8';
   else if (filename.endsWith('.md')) mimeType = 'text/markdown;charset=utf-8';
 
-  const blob = new Blob([content], { type: mimeType });
+  saveOrDownloadFile(content, filename, mimeType);
+}
+
+async function saveOrDownloadFile(content, filename, mimeType) {
+  const type = mimeType || 'text/plain;charset=utf-8';
+  const blob = content instanceof Blob ? content : new Blob([content], { type });
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  if (isIOS && navigator.canShare) {
+    try {
+      const file = new File([blob], filename, { type: type.split(';')[0] });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        showToast(`Saved "${filename}"`, 'success');
+        return;
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+    }
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.rel = 'noopener';
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
   setTimeout(() => {
-    document.body.removeChild(a);
+    if (a.parentNode) document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 60000);
   showToast(`Saved "${filename}"`, 'success');
+}
+
+function createSampleDocument(type, customContent = null, customTitle = 'IMPACT_Document') {
+  const chat = state.conversations[state.currentChatId];
+  const lastAssistantMsg = chat?.messages ? [...chat.messages].reverse().find(m => m.role === 'assistant')?.content : '';
+  const bodyText = customContent || lastAssistantMsg || 'IMPACT Workspace Generated Document';
+  const timestamp = new Date().toISOString().slice(0, 10);
+
+  if (type === 'text') {
+    saveOrDownloadFile(bodyText, `${customTitle}_${timestamp}.txt`, 'text/plain;charset=utf-8');
+  } else if (type === 'word') {
+    const docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${escapeHtml(customTitle)}</title></head><body style="font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;">${escapeHtml(bodyText).replace(/\n/g, '<br>')}</body></html>`;
+    saveOrDownloadFile(docHtml, `${customTitle}_${timestamp}.doc`, 'application/msword');
+  } else if (type === 'presentation') {
+    const slides = bodyText.split(/\n{2,}/).filter(Boolean);
+    const slideHtml = slides.map((s, i) => `<section style="padding:40px;margin:20px auto;max-width:800px;min-height:420px;border:1px solid #ccc;border-radius:12px;page-break-after:always;font-family:Inter,sans-serif;"><h2>Slide ${i + 1}</h2><p style="white-space:pre-wrap;font-size:18px;line-height:1.6;">${escapeHtml(s)}</p></section>`).join('');
+    const deck = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)} Presentation</title></head><body style="background:#f5f5fa;margin:0;padding:20px;">${slideHtml}</body></html>`;
+    saveOrDownloadFile(deck, `${customTitle}_${timestamp}_slides.html`, 'text/html;charset=utf-8');
+  } else if (type === 'pdf') {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      showToast('Allow popups to export PDF', 'error');
+      return;
+    }
+    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)}</title><style>body{font-family:Inter,Arial,sans-serif;padding:40px;line-height:1.6;color:#111;white-space:pre-wrap;}</style></head><body>${escapeHtml(bodyText)}</body></html>`);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => { printWin.print(); }, 300);
+  }
 }
 
 async function sendCoderToAI() {

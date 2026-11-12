@@ -1786,7 +1786,7 @@
     <div class="coder-finder-controls">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <span class="coder-finder-badge" id="coderMatchBadge">0 matches</span>
-        <button class="coder-btn" style="padding: 6px 14px; font-size: 12px;" onclick="clearFinderQuery()" title="Clear both Find and Replace boxes">
+        <button class="coder-btn" style="padding: 6px 14px; font-size: 12px; background: var(--accent-secondary); color: var(--bg-primary); border-color: var(--accent-primary); font-weight: 700; box-shadow: var(--shadow-glow);" onclick="clearFinderQuery()" title="Clear both Find and Replace boxes">
           <svg class="ico ico-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           Clear
         </button>
@@ -8589,10 +8589,48 @@ function undoCoderEdit() {
   showToast('Reverted last code edit', 'info');
 }
 
+function stripBakedEditorBloatFromText(raw) {
+  if (!raw) return '';
+  let out = raw;
+  const lnMarker = '<div class="coder-line-numbers" id="coderLineNumbers">';
+  const lnStart = out.indexOf(lnMarker);
+  if (lnStart !== -1) {
+    const lnEnd = out.indexOf('</div>', lnStart);
+    if (lnEnd !== -1) {
+      out = out.slice(0, lnStart + lnMarker.length) + '1' + out.slice(lnEnd);
+    }
+  }
+  const bdStart = out.indexOf('<pre class="coder-backdrop" id="coderBackdrop"');
+  if (bdStart !== -1) {
+    const tagEnd = out.indexOf('>', bdStart);
+    const preEnd = out.indexOf('</pre>', bdStart);
+    if (tagEnd !== -1 && preEnd !== -1 && preEnd > tagEnd) {
+      out = out.slice(0, tagEnd + 1) + out.slice(preEnd);
+    }
+  }
+  return out;
+}
+
+function purgeBakedInEditorBloat() {
+  const ln = document.getElementById('coderLineNumbers');
+  if (ln) ln.innerHTML = '1';
+  const bd = document.getElementById('coderBackdrop');
+  if (bd) bd.innerHTML = '';
+  const ta = document.getElementById('coderTextarea');
+  if (ta && ta.value) {
+    const cleaned = stripBakedEditorBloatFromText(ta.value);
+    if (cleaned !== ta.value) {
+      ta.value = cleaned;
+      localStorage.setItem('aiHub_coderContent', cleaned);
+    }
+  }
+}
+
 function initCoderStudio() {
   state.coderOpen = false;
   localStorage.setItem('aiHub_coderOpen', 'false');
-  const savedCode = localStorage.getItem('aiHub_coderContent') || '';
+  purgeBakedInEditorBloat();
+  const savedCode = stripBakedEditorBloatFromText(localStorage.getItem('aiHub_coderContent') || '');
   const savedName = localStorage.getItem('aiHub_coderFilename') || 'index.html';
   const savedWidth = localStorage.getItem('aiHub_coderWidth');
 
@@ -9105,10 +9143,12 @@ function openFileInCoder(event) {
     const filenameInput = document.getElementById('coderFilename');
     if (textarea) {
       pushCoderUndo(textarea.value);
-      textarea.value = e.target.result;
+      const isHtmlDoc = /\.html?$/i.test(file.name);
+      textarea.value = isHtmlDoc ? sanitizeSelfHtml(e.target.result) : e.target.result;
       localStorage.setItem('aiHub_coderContent', textarea.value);
       runCoderSearch(false);
       updateCoderLineNumbers();
+      updateSyntaxHighlighting();
     }
     if (filenameInput) {
       filenameInput.value = file.name;
@@ -9224,21 +9264,19 @@ function downloadCoderFile() {
   const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
   if (!textarea) return;
 
-  let content = textarea.value
-    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
-    .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '')
-    .replace(/<div class="coder-line-numbers" id="coderLineNumbers">[\s\S]*?<\/div>/, '<div class="coder-line-numbers" id="coderLineNumbers">1</div>')
-    .replace(/<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true">[\s\S]*?<\/pre>/, '<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true"></pre>');
+  const raw = textarea.value || '';
+  const isHtmlDoc = /\.html?$/i.test(filename);
+  let content = stripBakedEditorBloatFromText(raw);
 
-  if (filename.endsWith('.html') || filename.endsWith('.htm')) {
-    if (!content.trim().toLowerCase().startsWith('<!doctype')) {
-      content = '<!DOCTYPE html>\n' + content;
-    }
+  if (isHtmlDoc && /<html[\s>]/i.test(content)) {
+    content = sanitizeSelfHtml(content);
+  } else {
+    content = stripCodeBlockUIArtifacts(content);
   }
 
   let mimeType = 'text/plain;charset=utf-8';
   if (filename.endsWith('.json')) mimeType = 'application/json;charset=utf-8';
-  else if (filename.endsWith('.html') || filename.endsWith('.htm')) mimeType = 'text/html;charset=utf-8';
+  else if (isHtmlDoc) mimeType = 'text/html;charset=utf-8';
   else if (filename.endsWith('.js')) mimeType = 'application/javascript;charset=utf-8';
   else if (filename.endsWith('.css')) mimeType = 'text/css;charset=utf-8';
   else if (filename.endsWith('.py')) mimeType = 'text/x-python;charset=utf-8';

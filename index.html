@@ -4418,16 +4418,25 @@ function sendCodeBlockToEditor(btn) {
   showToast('Code loaded into Coder Studio', 'success');
 }
 
+let coderOriginalRawContent = null;
+let coderDirty = false;
+let coderOriginalEol = '\n';
+
 function openFileInCoder(event) {
   const file = event.target.files?.[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
+    const rawText = e.target.result;
+    coderOriginalRawContent = rawText;
+    coderOriginalEol = rawText.includes('\r\n') ? '\r\n' : '\n';
+    coderDirty = false;
+
     const textarea = document.getElementById('coderTextarea');
     const filenameInput = document.getElementById('coderFilename');
     if (textarea) {
       pushCoderUndo(textarea.value);
-      textarea.value = e.target.result;
+      textarea.value = rawText;
       localStorage.setItem('aiHub_coderContent', textarea.value);
       runCoderSearch(false);
       updateCoderLineNumbers();
@@ -4437,26 +4446,56 @@ function openFileInCoder(event) {
       localStorage.setItem('aiHub_coderFilename', file.name);
     }
     updateSyntaxHighlighting();
-    storeDocumentInMemory(file, e.target.result);
-    showToast(`Opened "${file.name}" in Coder Studio & added to knowledge base`, 'success');
+    storeDocumentInMemory(file, rawText);
+    showToast(`Opened "${file.name}" (${formatBytes(file.size)}) in Coder Studio`, 'success');
   };
   reader.readAsText(file);
   event.target.value = '';
 }
 
-function loadSelfIntoCoder() {
+async function loadSelfIntoCoder() {
   const textarea = document.getElementById('coderTextarea');
   const filenameInput = document.getElementById('coderFilename');
   if (!textarea) return;
   pushCoderUndo(textarea.value);
-  const cloneDoc = document.documentElement.cloneNode(true);
-  const bd = cloneDoc.querySelector('#coderBackdrop');
-  if (bd) bd.innerHTML = '';
-  const ln = cloneDoc.querySelector('#coderLineNumbers');
-  if (ln) ln.innerHTML = '1';
-  const ta = cloneDoc.querySelector('#coderTextarea');
-  if (ta) ta.innerHTML = '';
-  const fullHtml = '<!DOCTYPE html>\n' + cloneDoc.outerHTML;
+
+  let fullHtml = '';
+  try {
+    if (window.location.protocol.startsWith('http')) {
+      const res = await fetch(window.location.href, { cache: 'no-store' });
+      if (res.ok) fullHtml = await res.text();
+    }
+  } catch (_) {}
+
+  if (!fullHtml) {
+    const cloneDoc = document.documentElement.cloneNode(true);
+    [
+      '#coderBackdrop',
+      '#coderLineNumbers',
+      '#coderTextarea',
+      '#chatList',
+      '#messagesContainer',
+      '#docsList',
+      '#themeGrid',
+      '#modalThemeGrid',
+      '#toastContainer',
+      '#pendingAttachmentBar'
+    ].forEach(sel => {
+      const el = cloneDoc.querySelector(sel);
+      if (el) el.innerHTML = sel === '#coderLineNumbers' ? '1' : '';
+    });
+    cloneDoc.querySelectorAll('style').forEach(s => {
+      if (s.textContent.includes('google_ads_iframe') || s.textContent.includes('taboola')) s.remove();
+    });
+    cloneDoc.querySelectorAll('[data-ddg-inputtype]').forEach(el => el.removeAttribute('data-ddg-inputtype'));
+    fullHtml = '<!DOCTYPE html>\n' + cloneDoc.outerHTML;
+  }
+
+  fullHtml = sanitizeFullHtmlSource(fullHtml);
+  coderOriginalRawContent = fullHtml;
+  coderOriginalEol = fullHtml.includes('\r\n') ? '\r\n' : '\n';
+  coderDirty = false;
+
   textarea.value = fullHtml;
   if (filenameInput) {
     filenameInput.value = 'index.html';
@@ -4470,7 +4509,7 @@ function loadSelfIntoCoder() {
   const fakeFile = new File([fullHtml], 'index.html', { type: 'text/html' });
   storeDocumentInMemory(fakeFile, fullHtml);
 
-  showToast('Loaded current IMPACT Workspace source into editor & memory', 'success');
+  showToast('Loaded clean IMPACT Workspace source into editor & memory', 'success');
 }
 
 async function sendCoderToAI() {
@@ -4531,6 +4570,16 @@ function downloadCoderFile() {
   if (!textarea) return;
 
   let content = sanitizeFullHtmlSource(textarea.value);
+
+  if (coderOriginalRawContent !== null) {
+    const normOriginal = sanitizeFullHtmlSource(coderOriginalRawContent).replace(/\r\n/g, '\n');
+    if (content === normOriginal) {
+      content = sanitizeFullHtmlSource(coderOriginalRawContent);
+    } else if (coderOriginalEol === '\r\n' && !content.includes('\r\n')) {
+      content = content.replace(/\n/g, '\r\n');
+    }
+  }
+
   textarea.value = content;
   localStorage.setItem('aiHub_coderContent', content);
   updateCoderLineNumbers();
@@ -4538,7 +4587,7 @@ function downloadCoderFile() {
 
   if (filename.endsWith('.html') || filename.endsWith('.htm')) {
     if (!content.trim().toLowerCase().startsWith('<!doctype')) {
-      content = '<!DOCTYPE html>\n' + content;
+      content = '<!DOCTYPE html>' + coderOriginalEol + content;
     }
   }
 

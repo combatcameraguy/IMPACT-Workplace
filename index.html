@@ -3815,8 +3815,7 @@ function undoCoderEdit() {
 }
 
 function initCoderStudio() {
-  state.coderOpen = false;
-  localStorage.setItem('aiHub_coderOpen', 'false');
+  state.coderOpen = localStorage.getItem('aiHub_coderOpen') === 'true';
   const savedCode = localStorage.getItem('aiHub_coderContent') || '';
   const savedName = localStorage.getItem('aiHub_coderFilename') || 'index.html';
   const savedWidth = localStorage.getItem('aiHub_coderWidth');
@@ -3831,11 +3830,13 @@ function initCoderStudio() {
   if (savedWidth && panel) panel.style.width = savedWidth + 'px';
   if (textarea) textarea.value = savedCode;
   if (filenameInput) filenameInput.value = savedName;
-  panel?.classList.add('collapsed');
-  toggleBtn?.classList.remove('active-coder');
+  if (state.coderOpen && panel) {
+    panel.classList.remove('collapsed');
+    toggleBtn?.classList.add('active-coder');
+  }
   const toggleBtnLabel = document.getElementById('coderToggleBtnLabel');
   if (toggleBtnLabel) {
-    toggleBtnLabel.textContent = 'Open Right Coder Studio';
+    toggleBtnLabel.textContent = state.coderOpen ? 'Close Right Coder Studio' : 'Open Right Coder Studio';
   }
   updateCoderLineNumbers();
   renderCoderBackdrop();
@@ -4492,6 +4493,99 @@ function loadSelfIntoCoder() {
         showToast('Failed to load HTML content: ' + error.message, 'error');
       }
     });
+}
+
+async function sendCoderToAI() {
+  const textarea = document.getElementById('coderTextarea');
+  const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
+  if (!textarea || !textarea.value.trim()) {
+    showToast('Coder editor is empty', 'info');
+    return;
+  }
+  const codeText = textarea.value;
+  const fakeFile = { name: filename, type: 'text/plain', size: new Blob([codeText]).size };
+  const savedDoc = storeDocumentInMemory(fakeFile, codeText);
+  const att = await addPendingAttachment(fakeFile, codeText, savedDoc?.id);
+  state.pendingAttachments.push(att);
+  renderPendingAttachments();
+  document.getElementById('userInput')?.focus();
+  showToast(`Attached "${filename}" from Coder Studio to chat`, 'success');
+}
+
+function copyCoderContent() {
+  const textarea = document.getElementById('coderTextarea');
+  if (!textarea) return;
+  navigator.clipboard.writeText(textarea.value).then(() => {
+    showToast('Copied editor code to clipboard', 'success');
+  });
+}
+
+function sanitizeFullHtmlSource(rawHtml) {
+  if (!rawHtml) return '';
+  let out = rawHtml
+    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
+    .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '');
+
+  const lnMarker = '<div class="coder-line-numbers" id="coderLineNumbers">';
+  const lnStart = out.indexOf(lnMarker);
+  if (lnStart !== -1) {
+    const lnEnd = out.indexOf('</div>', lnStart);
+    if (lnEnd !== -1) {
+      out = out.slice(0, lnStart + lnMarker.length) + '1' + out.slice(lnEnd);
+    }
+  }
+
+  const bdMarker = '<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true">';
+  const bdStart = out.indexOf(bdMarker);
+  const taMarker = '<textarea class="coder-textarea" id="coderTextarea"';
+  const taStart = out.indexOf(taMarker, bdStart !== -1 ? bdStart : 0);
+  if (bdStart !== -1 && taStart !== -1) {
+    const preEnd = out.lastIndexOf('</pre>', taStart);
+    if (preEnd !== -1 && preEnd >= bdStart) {
+      out = out.slice(0, bdStart + bdMarker.length) + out.slice(preEnd);
+    }
+  }
+  return out;
+}
+
+function downloadCoderFile() {
+  const textarea = document.getElementById('coderTextarea');
+  const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
+  if (!textarea) return;
+
+  let content = sanitizeFullHtmlSource(textarea.value);
+  textarea.value = content;
+  localStorage.setItem('aiHub_coderContent', content);
+  updateCoderLineNumbers();
+  updateSyntaxHighlighting();
+
+  if (filename.endsWith('.html') || filename.endsWith('.htm')) {
+    if (!content.trim().toLowerCase().startsWith('<!doctype')) {
+      content = '<!DOCTYPE html>\n' + content;
+    }
+  }
+
+  let mimeType = 'text/plain;charset=utf-8';
+  if (filename.endsWith('.json')) mimeType = 'application/json;charset=utf-8';
+  else if (filename.endsWith('.html') || filename.endsWith('.htm')) mimeType = 'text/html;charset=utf-8';
+  else if (filename.endsWith('.js')) mimeType = 'application/javascript;charset=utf-8';
+  else if (filename.endsWith('.css')) mimeType = 'text/css;charset=utf-8';
+  else if (filename.endsWith('.py')) mimeType = 'text/x-python;charset=utf-8';
+  else if (filename.endsWith('.md')) mimeType = 'text/markdown;charset=utf-8';
+
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 60000);
+  showToast(`Saved "${filename}"`, 'success');
 }
 
 async function sendCoderToAI() {

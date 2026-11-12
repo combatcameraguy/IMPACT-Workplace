@@ -1206,39 +1206,49 @@
     font-size: 13px;
     line-height: 1.6;
     white-space: pre;
-    overflow: auto;
+    overflow-wrap: normal;
+    overflow: hidden;
     pointer-events: none;
-    color: transparent;
+    color: var(--text-primary);
     background: transparent;
     tab-size: 2;
     z-index: 1;
   }
-  .coder-backdrop::-webkit-scrollbar {
-    display: none;
-  }
   .coder-backdrop mark.code-find-match {
     background: rgba(255, 203, 5, 0.22);
     border-bottom: 1px dashed rgba(255, 203, 5, 0.75);
-    color: transparent;
+    color: inherit;
     border-radius: 2px;
   }
   .coder-backdrop mark.code-find-active {
     background: rgba(0, 206, 201, 0.36);
     outline: 2px solid var(--accent-green);
     box-shadow: 0 0 14px var(--accent-green-glow);
-    color: transparent;
+    color: inherit;
     border-radius: 2px;
   }
+  .coder-backdrop .cm-keyword { color: #ff79c6; font-weight: 600; }
+  .coder-backdrop .cm-string { color: #50fa7b; }
+  .coder-backdrop .cm-comment { color: var(--text-muted); font-style: italic; }
+  .coder-backdrop .cm-number { color: #bd93f9; }
+  .coder-backdrop .cm-atom { color: #ffb86c; }
+  .coder-backdrop .cm-tag { color: #ff79c6; }
+  .coder-backdrop .cm-attr { color: #50fa7b; }
+  .coder-backdrop .cm-selector { color: #8be9fd; }
+  .coder-backdrop .cm-property { color: #66d9ef; }
+  .coder-backdrop .cm-value { color: #f1fa8c; }
+  .coder-backdrop .cm-bracket { color: var(--accent-secondary); }
   .coder-textarea {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     padding: 14px;
+    margin: 0;
     background: transparent;
     border: none;
-    color: var(--text-primary);
-    -webkit-text-fill-color: var(--text-primary);
+    color: transparent;
+    -webkit-text-fill-color: transparent;
     caret-color: var(--accent-primary);
     font-family: 'JetBrains Mono', monospace;
     font-size: 13px;
@@ -1250,6 +1260,11 @@
     overflow: auto;
     tab-size: 2;
     z-index: 2;
+  }
+  .coder-textarea::selection {
+    background: rgba(108, 92, 231, 0.35);
+    color: transparent;
+    -webkit-text-fill-color: transparent;
   }
   .coder-finder-drawer {
     background: var(--bg-secondary);
@@ -4058,33 +4073,148 @@ function updateMatchBadge() {
   }
 }
 
-function updateSyntaxHighlighting() {
-  renderCoderBackdrop();
+function highlightSingleLang(escaped, language) {
+  if (!escaped) return '';
+  if (language === 'css') {
+    return escaped.replace(
+      /(\/\*[\s\S]*?\*\/)|(--[a-zA-Z0-9\-_]+)|(@[a-zA-Z\-]+)|(#[0-9a-fA-F]{3,8}\b)|(\b\d+(?:\.\d+)?(?:px|rem|em|vh|vw|dvh|dvw|%|s|ms|deg|fr)?\b)|([.#][a-zA-Z0-9\-_]+|\b(?:body|html|aside|main|div|span|button|input|textarea|select|svg|path|circle|rect|line|polyline|polygon|g|pre|code|mark|label|p|h1|h2|a|iframe|section)\b)|(\{|\}|\[|\]|\(|\))|([a-zA-Z\-]+)(\s*:\s*)/g,
+      (match, comment, cssVar, atRule, hex, num, selector, bracket, prop, colon) => {
+        if (comment) return `<span class="cm-comment">${comment}</span>`;
+        if (cssVar) return `<span class="cm-atom">${cssVar}</span>`;
+        if (atRule) return `<span class="cm-keyword">${atRule}</span>`;
+        if (hex) return `<span class="cm-number">${hex}</span>`;
+        if (num) return `<span class="cm-number">${num}</span>`;
+        if (selector) return `<span class="cm-selector">${selector}</span>`;
+        if (bracket) return `<span class="cm-bracket">${bracket}</span>`;
+        if (prop) return `<span class="cm-property">${prop}</span>${colon}`;
+        return match;
+      }
+    );
+  }
+  if (language === 'javascript') {
+    return escaped.replace(
+      /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|('[^'\n]*'|"[^"\n]*"|`[\s\S]*?`)|\b(function|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|var|let|const|class|extends|import|export|default|from|as|async|await|new|typeof|instanceof|void|delete|in|of)\b|\b(true|false|null|undefined|NaN|Infinity|window|document|localStorage|console|JSON|Math|Date|Promise|Set|Array|Object|FileReader|Blob|URL|File|Headers|AbortController|AbortSignal|TextDecoder|DOMParser|RegExp)\b|\b([0-9]+(?:\.[0-9]+)?)\b|\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()|(\.[a-zA-Z_$][a-zA-Z0-9_$]*)|([{}()\[\]])/g,
+      (match, comment, str, kw, atom, num, fnCall, prop, bracket) => {
+        if (comment) return `<span class="cm-comment">${comment}</span>`;
+        if (str) return `<span class="cm-string">${str}</span>`;
+        if (kw) return `<span class="cm-keyword">${kw}</span>`;
+        if (atom) return `<span class="cm-atom">${atom}</span>`;
+        if (num) return `<span class="cm-number">${num}</span>`;
+        if (fnCall) return `<span class="cm-selector">${fnCall}</span>`;
+        if (prop) return `<span class="cm-property">${prop}</span>`;
+        if (bracket) return `<span class="cm-bracket">${bracket}</span>`;
+        return match;
+      }
+    );
+  }
+  if (language === 'python') {
+    return escaped.replace(
+      /(#[^\n]*)|('''[\s\S]*?'''|"""[\s\S]*?"""|'[^'\n]*'|"[^"\n]*")|\b(def|class|if|elif|else|for|while|try|except|finally|with|import|from|as|return|yield|lambda|and|or|not|in|is|assert|break|continue|del|global|nonlocal|pass|print|raise|async|await)\b|\b(True|False|None|self|cls|len|range|str|int|float|dict|list|set|tuple|open| super)\b|\b([0-9]+(?:\.[0-9]+)?)\b|\b([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*\()|([{}()\[\]])/g,
+      (match, comment, str, kw, atom, num, fnCall, bracket) => {
+        if (comment) return `<span class="cm-comment">${comment}</span>`;
+        if (str) return `<span class="cm-string">${str}</span>`;
+        if (kw) return `<span class="cm-keyword">${kw}</span>`;
+        if (atom) return `<span class="cm-atom">${atom}</span>`;
+        if (num) return `<span class="cm-number">${num}</span>`;
+        if (fnCall) return `<span class="cm-selector">${fnCall}</span>`;
+        if (bracket) return `<span class="cm-bracket">${bracket}</span>`;
+        return match;
+      }
+    );
+  }
+  if (language === 'json') {
+    return escaped.replace(
+      /("[^"\n]*"\s*:)|("[^"\n]*")|\b(true|false|null)\b|\b(-?[0-9]+(?:\.[0-9]+)?)\b|([{}()\[\]])/g,
+      (match, key, str, atom, num, bracket) => {
+        if (key) return `<span class="cm-property">${key}</span>`;
+        if (str) return `<span class="cm-string">${str}</span>`;
+        if (atom) return `<span class="cm-atom">${atom}</span>`;
+        if (num) return `<span class="cm-number">${num}</span>`;
+        if (bracket) return `<span class="cm-bracket">${bracket}</span>`;
+        return match;
+      }
+    );
+  }
+  return escaped;
 }
 
-function renderCoderBackdrop() {
+function highlightHtmlMarkup(escapedHtml) {
+  return escapedHtml.replace(
+    /(&lt;!--[\s\S]*?--&gt;)|(&lt;!DOCTYPE[^&]*&gt;)|(&lt;\/?[a-zA-Z0-9\-]+)|(\s+[a-zA-Z0-9\-_:]+)(\s*=\s*)("[^"]*"|'[^']*'|[^\s&]+)|(\s+[a-zA-Z0-9\-_:]+)(?=[\s\/&])|(\/?&gt;)/gi,
+    (match, comment, doctype, tag, attrName, eq, attrVal, boolAttr, closeTag) => {
+      if (comment) return `<span class="cm-comment">${comment}</span>`;
+      if (doctype) return `<span class="cm-atom">${doctype}</span>`;
+      if (tag) return `<span class="cm-tag">${tag}</span>`;
+      if (attrName) return `<span class="cm-property">${attrName}</span>${eq}<span class="cm-string">${attrVal}</span>`;
+      if (boolAttr) return `<span class="cm-property">${boolAttr}</span>`;
+      if (closeTag) return `<span class="cm-tag">${closeTag}</span>`;
+      return match;
+    }
+  );
+}
+
+function highlightCodeSegment(rawSegment, language) {
+  if (!rawSegment) return '';
+  const escaped = escapeHtml(rawSegment);
+
+  if (language === 'html') {
+    const blocks = [];
+    const withBlocks = escaped.replace(
+      /(&lt;(style|script)\b[\s\S]*?&gt;)([\s\S]*?)(&lt;\/\2&gt;)/gi,
+      (_, openTag, tagName, inner, closeTag) => {
+        const subLang = tagName.toLowerCase() === 'style' ? 'css' : 'javascript';
+        const coloredOpen = highlightHtmlMarkup(openTag);
+        const coloredInner = highlightSingleLang(inner, subLang);
+        const coloredClose = highlightHtmlMarkup(closeTag);
+        const idx = blocks.length;
+        blocks.push(coloredOpen + coloredInner + coloredClose);
+        return `@@SYNTAX_BLOCK_${idx}@@`;
+      }
+    );
+    const highlightedMarkup = highlightHtmlMarkup(withBlocks);
+    return highlightedMarkup.replace(/@@SYNTAX_BLOCK_(\d+)@@/g, (_, idx) => blocks[Number(idx)]);
+  }
+
+  return highlightSingleLang(escaped, language);
+}
+
+function updateSyntaxHighlighting() {
   const textarea = document.getElementById('coderTextarea');
   const backdrop = document.getElementById('coderBackdrop');
+  const filename = document.getElementById('coderFilename')?.value || '';
   if (!textarea || !backdrop) return;
 
   const code = textarea.value || '';
+  const extension = filename.split('.').pop()?.toLowerCase();
+
+  let language = 'plaintext';
+  if (extension === 'html' || extension === 'htm') language = 'html';
+  else if (extension === 'css') language = 'css';
+  else if (extension === 'js' || extension === 'jsx' || extension === 'ts' || extension === 'tsx') language = 'javascript';
+  else if (extension === 'py') language = 'python';
+  else if (extension === 'json') language = 'json';
+
   if (coderSearchMatches.length === 0) {
-    backdrop.innerHTML = '';
-    return;
+    backdrop.innerHTML = highlightCodeSegment(code, language) + '\n';
+  } else {
+    let finalHtml = '';
+    let lastIndex = 0;
+    coderSearchMatches.forEach((m, idx) => {
+      finalHtml += highlightCodeSegment(code.slice(lastIndex, m.start), language);
+      const cls = idx === coderActiveMatchIdx ? 'code-find-match code-find-active' : 'code-find-match';
+      finalHtml += `<mark class="${cls}">${highlightCodeSegment(code.slice(m.start, m.end), language)}</mark>`;
+      lastIndex = m.end;
+    });
+    finalHtml += highlightCodeSegment(code.slice(lastIndex), language) + '\n';
+    backdrop.innerHTML = finalHtml;
   }
 
-  let html = '';
-  let lastIndex = 0;
-  coderSearchMatches.forEach((m, idx) => {
-    html += escapeHtml(code.slice(lastIndex, m.start));
-    const cls = idx === coderActiveMatchIdx ? 'code-find-match code-find-active' : 'code-find-match';
-    html += `<mark class="${cls}">${escapeHtml(code.slice(m.start, m.end))}</mark>`;
-    lastIndex = m.end;
-  });
-  html += escapeHtml(code.slice(lastIndex)) + '\n';
-  backdrop.innerHTML = html;
   backdrop.scrollTop = textarea.scrollTop;
   backdrop.scrollLeft = textarea.scrollLeft;
+}
+
+function renderCoderBackdrop() {
+  updateSyntaxHighlighting();
 }
 
 function replaceActiveCoderMatch() {

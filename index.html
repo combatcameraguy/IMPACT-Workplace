@@ -6319,16 +6319,44 @@ function copyCoderContent() {
   });
 }
 
+function sanitizeFullHtmlSource(rawHtml) {
+  if (!rawHtml) return '';
+  let out = rawHtml
+    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
+    .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '');
+
+  const lnMarker = '<div class="coder-line-numbers" id="coderLineNumbers">';
+  const lnStart = out.indexOf(lnMarker);
+  if (lnStart !== -1) {
+    const lnEnd = out.indexOf('</div>', lnStart);
+    if (lnEnd !== -1) {
+      out = out.slice(0, lnStart + lnMarker.length) + '1' + out.slice(lnEnd);
+    }
+  }
+
+  const bdMarker = '<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true">';
+  const bdStart = out.indexOf(bdMarker);
+  const taMarker = '<textarea class="coder-textarea" id="coderTextarea"';
+  const taStart = out.indexOf(taMarker, bdStart !== -1 ? bdStart : 0);
+  if (bdStart !== -1 && taStart !== -1) {
+    const preEnd = out.lastIndexOf('</pre>', taStart);
+    if (preEnd !== -1 && preEnd >= bdStart) {
+      out = out.slice(0, bdStart + bdMarker.length) + out.slice(preEnd);
+    }
+  }
+  return out;
+}
+
 function downloadCoderFile() {
   const textarea = document.getElementById('coderTextarea');
   const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
   if (!textarea) return;
 
-  let content = textarea.value
-    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
-    .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '')
-    .replace(/<div class="coder-line-numbers" id="coderLineNumbers">[\s\S]*?<\/div>/, '<div class="coder-line-numbers" id="coderLineNumbers">1</div>')
-    .replace(/<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true">[\s\S]*?<\/pre>/, '<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true"></pre>');
+  let content = sanitizeFullHtmlSource(textarea.value);
+  textarea.value = content;
+  localStorage.setItem('aiHub_coderContent', content);
+  updateCoderLineNumbers();
+  updateSyntaxHighlighting();
 
   if (filename.endsWith('.html') || filename.endsWith('.htm')) {
     if (!content.trim().toLowerCase().startsWith('<!doctype')) {

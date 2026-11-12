@@ -1226,26 +1226,9 @@
     background: rgba(0, 206, 201, 0.36);
     outline: 2px solid var(--accent-green);
     box-shadow: 0 0 14px var(--accent-green-glow);
-    color: inherit;
+    color: transparent;
     border-radius: 2px;
   }
-  .coder-backdrop {
-    color: transparent;
-  }
-  .coder-backdrop mark.code-find-match {
-    color: inherit;
-  }
-  .coder-backdrop .cm-keyword { color: #ff79c6; font-weight: 600; }
-  .coder-backdrop .cm-string { color: #50fa7b; }
-  .coder-backdrop .cm-comment { color: var(--text-muted); font-style: italic; }
-  .coder-backdrop .cm-number { color: #bd93f9; }
-  .coder-backdrop .cm-atom { color: #ffb86c; }
-  .coder-backdrop .cm-tag { color: #ff79c6; }
-  .coder-backdrop .cm-attr { color: #50fa7b; }
-  .coder-backdrop .cm-selector { color: #8be9fd; }
-  .coder-backdrop .cm-property { color: #66d9ef; }
-  .coder-backdrop .cm-value { color: #f1fa8c; }
-  .coder-backdrop .cm-bracket { color: var(--accent-secondary); }
   .coder-textarea {
     position: absolute;
     inset: 0;
@@ -4075,113 +4058,33 @@ function updateMatchBadge() {
   }
 }
 
-function highlightCodeSegment(rawSegment, language) {
-  if (!rawSegment) return '';
-  const escaped = escapeHtml(rawSegment);
-
-  if (language === 'html') {
-    return escaped.replace(
-      /(&lt;!--[\s\S]*?--&gt;)|(&lt;\/?[a-zA-Z0-9\-]+)|(\s[a-zA-Z\-:]+=)("[^"]*"|'[^']*')|(&gt;)/g,
-      (match, comment, tag, attr, str, closeTag) => {
-        if (comment) return `<span class="cm-comment">${comment}</span>`;
-        if (tag) return `<span class="cm-tag">${tag}</span>`;
-        if (attr) return `<span class="cm-attr">${attr}</span><span class="cm-string">${str}</span>`;
-        if (closeTag) return `<span class="cm-tag">${closeTag}</span>`;
-        return match;
-      }
-    );
-  }
-  if (language === 'css') {
-    return escaped.replace(
-      /(\/\*[\s\S]*?\*\/)|([.#][a-zA-Z0-9\-_]+)|(\{|\})|([a-zA-Z\-]+)(\s*:\s*)([^;{}\n]+)/g,
-      (match, comment, selector, bracket, prop, colon, val) => {
-        if (comment) return `<span class="cm-comment">${comment}</span>`;
-        if (selector) return `<span class="cm-selector">${selector}</span>`;
-        if (bracket) return `<span class="cm-bracket">${bracket}</span>`;
-        if (prop) return `<span class="cm-property">${prop}</span>${colon}<span class="cm-value">${val}</span>`;
-        return match;
-      }
-    );
-  }
-  if (language === 'javascript') {
-    return escaped.replace(
-      /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|('[^'\n]*'|"[^"\n]*"|`[\s\S]*?`)|\b(function|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|var|let|const|class|extends|import|export|default|from|as|async|await|new|typeof|instanceof)\b|\b(true|false|null|undefined|NaN|Infinity)\b|\b([0-9]+(?:\.[0-9]+)?)\b|(\.[a-zA-Z_$][a-zA-Z0-9_$]*)/g,
-      (match, comment, str, kw, atom, num, prop) => {
-        if (comment) return `<span class="cm-comment">${comment}</span>`;
-        if (str) return `<span class="cm-string">${str}</span>`;
-        if (kw) return `<span class="cm-keyword">${kw}</span>`;
-        if (atom) return `<span class="cm-atom">${atom}</span>`;
-        if (num) return `<span class="cm-number">${num}</span>`;
-        if (prop) return `<span class="cm-property">${prop}</span>`;
-        return match;
-      }
-    );
-  }
-  if (language === 'python') {
-    return escaped.replace(
-      /(#[^\n]*)|('''[\s\S]*?'''|"""[\s\S]*?"""|'[^'\n]*'|"[^"\n]*")|\b(def|class|if|elif|else|for|while|try|except|finally|with|import|from|as|return|yield|lambda|and|or|not|in|is|assert|break|continue|del|global|nonlocal|pass|print|raise|async|await)\b|\b(True|False|None)\b|\b([0-9]+(?:\.[0-9]+)?)\b/g,
-      (match, comment, str, kw, atom, num) => {
-        if (comment) return `<span class="cm-comment">${comment}</span>`;
-        if (str) return `<span class="cm-string">${str}</span>`;
-        if (kw) return `<span class="cm-keyword">${kw}</span>`;
-        if (atom) return `<span class="cm-atom">${atom}</span>`;
-        if (num) return `<span class="cm-number">${num}</span>`;
-        return match;
-      }
-    );
-  }
-  if (language === 'json') {
-    return escaped.replace(
-      /("[^"\n]*"\s*:)|("[^"\n]*")|\b(true|false|null)\b|\b(-?[0-9]+(?:\.[0-9]+)?)\b/g,
-      (match, key, str, atom, num) => {
-        if (key) return `<span class="cm-property">${key}</span>`;
-        if (str) return `<span class="cm-string">${str}</span>`;
-        if (atom) return `<span class="cm-atom">${atom}</span>`;
-        if (num) return `<span class="cm-number">${num}</span>`;
-        return match;
-      }
-    );
-  }
-  return escaped;
-}
-
 function updateSyntaxHighlighting() {
-  const textarea = document.getElementById('coderTextarea');
-  const backdrop = document.getElementById('coderBackdrop');
-  const filename = document.getElementById('coderFilename')?.value || '';
-  if (!textarea || !backdrop) return;
-
-  const code = textarea.value || '';
-  const extension = filename.split('.').pop()?.toLowerCase();
-
-  let language = 'plaintext';
-  if (extension === 'html' || extension === 'htm') language = 'html';
-  else if (extension === 'css') language = 'css';
-  else if (extension === 'js' || extension === 'jsx' || extension === 'ts' || extension === 'tsx') language = 'javascript';
-  else if (extension === 'py') language = 'python';
-  else if (extension === 'json') language = 'json';
-
-  if (coderSearchMatches.length === 0) {
-    backdrop.innerHTML = highlightCodeSegment(code, language) + '\n';
-  } else {
-    let finalHtml = '';
-    let lastIndex = 0;
-    coderSearchMatches.forEach((m, idx) => {
-      finalHtml += highlightCodeSegment(code.slice(lastIndex, m.start), language);
-      const cls = idx === coderActiveMatchIdx ? 'code-find-match code-find-active' : 'code-find-match';
-      finalHtml += `<mark class="${cls}">${highlightCodeSegment(code.slice(m.start, m.end), language)}</mark>`;
-      lastIndex = m.end;
-    });
-    finalHtml += highlightCodeSegment(code.slice(lastIndex), language) + '\n';
-    backdrop.innerHTML = finalHtml;
-  }
-
-  backdrop.scrollTop = textarea.scrollTop;
-  backdrop.scrollLeft = textarea.scrollLeft;
+  renderCoderBackdrop();
 }
 
 function renderCoderBackdrop() {
-  updateSyntaxHighlighting();
+  const textarea = document.getElementById('coderTextarea');
+  const backdrop = document.getElementById('coderBackdrop');
+  if (!textarea || !backdrop) return;
+
+  const code = textarea.value || '';
+  if (coderSearchMatches.length === 0) {
+    backdrop.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  let lastIndex = 0;
+  coderSearchMatches.forEach((m, idx) => {
+    html += escapeHtml(code.slice(lastIndex, m.start));
+    const cls = idx === coderActiveMatchIdx ? 'code-find-match code-find-active' : 'code-find-match';
+    html += `<mark class="${cls}">${escapeHtml(code.slice(m.start, m.end))}</mark>`;
+    lastIndex = m.end;
+  });
+  html += escapeHtml(code.slice(lastIndex)) + '\n';
+  backdrop.innerHTML = html;
+  backdrop.scrollTop = textarea.scrollTop;
+  backdrop.scrollLeft = textarea.scrollLeft;
 }
 
 function replaceActiveCoderMatch() {
@@ -4515,18 +4418,17 @@ function sanitizeFullHtmlSource(rawHtml) {
   const lnStart = out.indexOf(lnMarker);
   if (lnStart !== -1) {
     const lnEnd = out.indexOf('</div>', lnStart);
-    if (lnEnd !== -1) {
+    if (lnEnd !== -1 && (lnEnd - lnStart) > 200) {
       out = out.slice(0, lnStart + lnMarker.length) + '1' + out.slice(lnEnd);
     }
   }
 
   const bdMarker = '<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true">';
   const bdStart = out.indexOf(bdMarker);
-  const taMarker = '<textarea class="coder-textarea" id="coderTextarea"';
-  const taStart = out.indexOf(taMarker, bdStart !== -1 ? bdStart : 0);
-  if (bdStart !== -1 && taStart !== -1) {
-    const preEnd = out.lastIndexOf('</pre>', taStart);
-    if (preEnd !== -1 && preEnd >= bdStart) {
+  if (bdStart !== -1) {
+    const preEnd = out.indexOf('</pre>', bdStart);
+    const taStart = out.indexOf('<textarea class="coder-textarea" id="coderTextarea"', bdStart);
+    if (preEnd !== -1 && taStart !== -1 && preEnd < taStart) {
       out = out.slice(0, bdStart + bdMarker.length) + out.slice(preEnd);
     }
   }

@@ -1710,23 +1710,8 @@
       <div class="input-hint">
         <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line · <kbd>Ctrl+L</kbd> clear chat
       </div>
-      <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
-        <button class="btn btn-secondary" onclick="createSampleDocument('text')" style="font-size: 12px; padding: 4px 8px;">
-          <svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          Create Text Doc
-        </button>
-        <button class="btn btn-secondary" onclick="createSampleDocument('presentation')" style="font-size: 12px; padding: 4px 8px;">
-          <svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M21 15.5V12a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3.5"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="15" x2="14" y2="15"/></svg>
-          Create Presentation
-        </button>
-        <button class="btn btn-secondary" onclick="createSampleDocument('word')" style="font-size: 12px; padding: 4px 8px;">
-          <svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-          Create Word Doc
-        </button>
-        <button class="btn btn-secondary" onclick="createSampleDocument('pdf')" style="font-size: 12px; padding: 4px 8px;">
-          <svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-          Create PDF Doc
-        </button>
+      <div class="input-hint">
+        <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line · <kbd>Ctrl+L</kbd> clear chat
       </div>
     </div>
   </div>
@@ -6373,6 +6358,96 @@ function downloadCoderFile() {
   else if (filename.endsWith('.md')) mimeType = 'text/markdown;charset=utf-8';
 
   saveOrDownloadFile(content, filename, mimeType);
+}
+
+function saveOrDownloadFile(content, filename, mimeType) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType || 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 60000);
+  showToast(`Saved ${filename}`, 'success');
+}
+
+function createSampleDocument(type, customContent = null, customTitle = 'IMPACT_Document') {
+  const chat = state.conversations[state.currentChatId];
+  const lastAssistantMsg = chat?.messages ? [...chat.messages].reverse().find(m => m.role === 'assistant')?.content : '';
+  const bodyText = customContent || lastAssistantMsg || 'IMPACT Workspace Generated Document';
+  const timestamp = new Date().toISOString().slice(0, 10);
+
+  if (type === 'text') {
+    saveOrDownloadFile(bodyText, `${customTitle}_${timestamp}.txt`, 'text/plain;charset=utf-8');
+  } else if (type === 'word') {
+    const docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${escapeHtml(customTitle)}</title></head><body style="font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;">${escapeHtml(bodyText).replace(/\n/g, '<br>')}</body></html>`;
+    saveOrDownloadFile(docHtml, `${customTitle}_${timestamp}.doc`, 'application/msword');
+  } else if (type === 'presentation') {
+    const slides = bodyText.split(/\n{2,}/).filter(Boolean);
+    const slideHtml = slides.map((s, i) => `<section style="padding:40px;margin:20px auto;max-width:800px;min-height:420px;border:1px solid #ccc;border-radius:12px;page-break-after:always;font-family:Inter,sans-serif;"><h2>Slide ${i + 1}</h2><p style="white-space:pre-wrap;font-size:18px;line-height:1.6;">${escapeHtml(s)}</p></section>`).join('');
+    const deck = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)} Presentation</title></head><body style="background:#f5f5fa;margin:0;padding:20px;">${slideHtml}</body></html>`;
+    saveOrDownloadFile(deck, `${customTitle}_${timestamp}_slides.html`, 'text/html;charset=utf-8');
+  } else if (type === 'pdf') {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      showToast('Allow popups to export PDF', 'error');
+      return;
+    }
+    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)}</title><style>body{font-family:Inter,Arial,sans-serif;padding:40px;line-height:1.6;color:#111;white-space:pre-wrap;}</style></head><body>${escapeHtml(bodyText)}</body></html>`);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => { printWin.print(); }, 300);
+  }
+}
+
+function saveOrDownloadFile(content, filename, mimeType) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType || 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 60000);
+  showToast(`Saved ${filename}`, 'success');
+}
+
+function createSampleDocument(type, customContent = null, customTitle = 'IMPACT_Document') {
+  const chat = state.conversations[state.currentChatId];
+  const lastAssistantMsg = chat?.messages ? [...chat.messages].reverse().find(m => m.role === 'assistant')?.content : '';
+  const bodyText = customContent || lastAssistantMsg || 'IMPACT Workspace Generated Document';
+  const timestamp = new Date().toISOString().slice(0, 10);
+
+  if (type === 'text') {
+    saveOrDownloadFile(bodyText, `${customTitle}_${timestamp}.txt`, 'text/plain;charset=utf-8');
+  } else if (type === 'word') {
+    const docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${escapeHtml(customTitle)}</title></head><body style="font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;">${escapeHtml(bodyText).replace(/\n/g, '<br>')}</body></html>`;
+    saveOrDownloadFile(docHtml, `${customTitle}_${timestamp}.doc`, 'application/msword');
+  } else if (type === 'presentation') {
+    const slides = bodyText.split(/\n{2,}/).filter(Boolean);
+    const slideHtml = slides.map((s, i) => `<section style="padding:40px;margin:20px auto;max-width:800px;min-height:420px;border:1px solid #ccc;border-radius:12px;page-break-after:always;font-family:Inter,sans-serif;"><h2>Slide ${i + 1}</h2><p style="white-space:pre-wrap;font-size:18px;line-height:1.6;">${escapeHtml(s)}</p></section>`).join('');
+    const deck = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)} Presentation</title></head><body style="background:#f5f5fa;margin:0;padding:20px;">${slideHtml}</body></html>`;
+    saveOrDownloadFile(deck, `${customTitle}_${timestamp}_slides.html`, 'text/html;charset=utf-8');
+  } else if (type === 'pdf') {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      showToast('Allow popups to export PDF', 'error');
+      return;
+    }
+    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)}</title><style>body{font-family:Inter,Arial,sans-serif;padding:40px;line-height:1.6;color:#111;white-space:pre-wrap;}</style></head><body>${escapeHtml(bodyText)}</body></html>`);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => { printWin.print(); }, 300);
+  }
 }
 
 function stopGeneration() { if(state.abortController) state.abortController.abort(); }

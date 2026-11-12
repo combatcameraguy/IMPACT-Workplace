@@ -4319,68 +4319,28 @@ function loadSelfIntoCoder() {
   const filenameInput = document.getElementById('coderFilename');
   if (!textarea) return;
   pushCoderUndo(textarea.value);
+  const cloneDoc = document.documentElement.cloneNode(true);
+  const bd = cloneDoc.querySelector('#coderBackdrop');
+  if (bd) bd.innerHTML = '';
+  const ln = cloneDoc.querySelector('#coderLineNumbers');
+  if (ln) ln.innerHTML = '1';
+  const ta = cloneDoc.querySelector('#coderTextarea');
+  if (ta) ta.innerHTML = '';
+  const fullHtml = '<!DOCTYPE html>\n' + cloneDoc.outerHTML;
+  textarea.value = fullHtml;
+  if (filenameInput) {
+    filenameInput.value = 'index.html';
+    localStorage.setItem('aiHub_coderFilename', 'index.html');
+  }
+  localStorage.setItem('aiHub_coderContent', fullHtml);
+  runCoderSearch(false);
+  updateCoderLineNumbers();
+  updateSyntaxHighlighting();
 
-  fetch(window.location.href, {
-    method: 'GET',
-    headers: {
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-      'Expires': '0'
-    }
-  })
-    .then(response => {
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return response.text();
-    })
-    .then(htmlContent => {
-      if (typeof htmlContent === 'string' && htmlContent.trim().length > 0) {
-        const cleanHtml = sanitizeFullHtmlSource(htmlContent);
-        textarea.value = cleanHtml;
-        if (filenameInput) {
-          filenameInput.value = 'index.html';
-          localStorage.setItem('aiHub_coderFilename', 'index.html');
-        }
-        localStorage.setItem('aiHub_coderContent', cleanHtml);
-        runCoderSearch(false);
-        updateCoderLineNumbers();
-        updateSyntaxHighlighting();
+  const fakeFile = new File([fullHtml], 'index.html', { type: 'text/html' });
+  storeDocumentInMemory(fakeFile, fullHtml);
 
-        const fakeFile = new File([cleanHtml], 'index.html', { type: 'text/html' });
-        storeDocumentInMemory(fakeFile, cleanHtml);
-
-        showToast('Loaded current IMPACT Workspace source into editor & memory', 'success');
-      } else {
-        throw new Error('Empty or invalid HTML content received');
-      }
-    })
-    .catch(error => {
-      try {
-        const cloneDoc = document.documentElement.cloneNode(true);
-        const bd = cloneDoc.querySelector('#coderBackdrop');
-        if (bd) bd.innerHTML = '';
-        const ln = cloneDoc.querySelector('#coderLineNumbers');
-        if (ln) ln.innerHTML = '1';
-        const ta = cloneDoc.querySelector('#coderTextarea');
-        if (ta) ta.innerHTML = '';
-        const fullHtml = sanitizeFullHtmlSource('<!DOCTYPE html>\n' + cloneDoc.outerHTML);
-        textarea.value = fullHtml;
-        if (filenameInput) {
-          filenameInput.value = 'index.html';
-          localStorage.setItem('aiHub_coderFilename', 'index.html');
-        }
-        localStorage.setItem('aiHub_coderContent', fullHtml);
-        runCoderSearch(false);
-        updateCoderLineNumbers();
-        updateSyntaxHighlighting();
-
-        const fakeFile = new File([fullHtml], 'index.html', { type: 'text/html' });
-        storeDocumentInMemory(fakeFile, fullHtml);
-
-        showToast('Loaded current page into editor & memory (fallback method)', 'success');
-      } catch (fallbackError) {
-        showToast('Failed to load HTML content: ' + error.message, 'error');
-      }
-    });
+  showToast('Loaded current IMPACT Workspace source into editor & memory', 'success');
 }
 
 async function sendCoderToAI() {
@@ -4496,132 +4456,6 @@ async function saveOrDownloadFile(content, filename, mimeType) {
     URL.revokeObjectURL(url);
   }, 60000);
   showToast(`Saved "${filename}"`, 'success');
-}
-
-function createSampleDocument(type, customContent = null, customTitle = 'IMPACT_Document') {
-  const chat = state.conversations[state.currentChatId];
-  const lastAssistantMsg = chat?.messages ? [...chat.messages].reverse().find(m => m.role === 'assistant')?.content : '';
-  const bodyText = customContent || lastAssistantMsg || 'IMPACT Workspace Generated Document';
-  const timestamp = new Date().toISOString().slice(0, 10);
-
-  if (type === 'text') {
-    saveOrDownloadFile(bodyText, `${customTitle}_${timestamp}.txt`, 'text/plain;charset=utf-8');
-  } else if (type === 'word') {
-    const docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${escapeHtml(customTitle)}</title></head><body style="font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;">${escapeHtml(bodyText).replace(/\n/g, '<br>')}</body></html>`;
-    saveOrDownloadFile(docHtml, `${customTitle}_${timestamp}.doc`, 'application/msword');
-  } else if (type === 'presentation') {
-    const slides = bodyText.split(/\n{2,}/).filter(Boolean);
-    const slideHtml = slides.map((s, i) => `<section style="padding:40px;margin:20px auto;max-width:800px;min-height:420px;border:1px solid #ccc;border-radius:12px;page-break-after:always;font-family:Inter,sans-serif;"><h2>Slide ${i + 1}</h2><p style="white-space:pre-wrap;font-size:18px;line-height:1.6;">${escapeHtml(s)}</p></section>`).join('');
-    const deck = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)} Presentation</title></head><body style="background:#f5f5fa;margin:0;padding:20px;">${slideHtml}</body></html>`;
-    saveOrDownloadFile(deck, `${customTitle}_${timestamp}_slides.html`, 'text/html;charset=utf-8');
-  } else if (type === 'pdf') {
-    const printWin = window.open('', '_blank');
-    if (!printWin) {
-      showToast('Allow popups to export PDF', 'error');
-      return;
-    }
-    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)}</title><style>body{font-family:Inter,Arial,sans-serif;padding:40px;line-height:1.6;color:#111;white-space:pre-wrap;}</style></head><body>${escapeHtml(bodyText)}</body></html>`);
-    printWin.document.close();
-    printWin.focus();
-    setTimeout(() => { printWin.print(); }, 300);
-  }
-}
-
-async function sendCoderToAI() {
-  const textarea = document.getElementById('coderTextarea');
-  const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
-  if (!textarea || !textarea.value.trim()) {
-    showToast('Coder editor is empty', 'info');
-    return;
-  }
-  const codeText = textarea.value;
-  const fakeFile = { name: filename, type: 'text/plain', size: new Blob([codeText]).size };
-  const savedDoc = storeDocumentInMemory(fakeFile, codeText);
-  const att = await addPendingAttachment(fakeFile, codeText, savedDoc?.id);
-  state.pendingAttachments.push(att);
-  renderPendingAttachments();
-  document.getElementById('userInput')?.focus();
-  showToast(`Attached "${filename}" from Coder Studio to chat`, 'success');
-}
-
-function copyCoderContent() {
-  const textarea = document.getElementById('coderTextarea');
-  if (!textarea) return;
-  navigator.clipboard.writeText(textarea.value).then(() => {
-    showToast('Copied editor code to clipboard', 'success');
-  });
-}
-
-function sanitizeFullHtmlSource(rawHtml) {
-  if (!rawHtml) return '';
-  let out = rawHtml
-    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
-    .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '');
-
-  const lnMarker = '<div class="coder-line-numbers" id="coderLineNumbers">';
-  const lnStart = out.indexOf(lnMarker);
-  if (lnStart !== -1) {
-    const lnEnd = out.indexOf('</div>', lnStart);
-    if (lnEnd !== -1) {
-      out = out.slice(0, lnStart + lnMarker.length) + '1' + out.slice(lnEnd);
-    }
-  }
-
-  const bdMarker = '<pre class="coder-backdrop" id="coderBackdrop" aria-hidden="true">';
-  const bdStart = out.indexOf(bdMarker);
-  const taMarker = '<textarea class="coder-textarea" id="coderTextarea"';
-  const taStart = out.indexOf(taMarker, bdStart !== -1 ? bdStart : 0);
-  if (bdStart !== -1 && taStart !== -1) {
-    const preEnd = out.lastIndexOf('</pre>', taStart);
-    if (preEnd !== -1 && preEnd >= bdStart) {
-      out = out.slice(0, bdStart + bdMarker.length) + out.slice(preEnd);
-    }
-  }
-  return out;
-}
-
-function downloadCoderFile() {
-  const textarea = document.getElementById('coderTextarea');
-  const filename = document.getElementById('coderFilename')?.value.trim() || 'index.html';
-  if (!textarea) return;
-
-  let content = sanitizeFullHtmlSource(textarea.value);
-  textarea.value = content;
-  localStorage.setItem('aiHub_coderContent', content);
-  updateCoderLineNumbers();
-  updateSyntaxHighlighting();
-
-  if (filename.endsWith('.html') || filename.endsWith('.htm')) {
-    if (!content.trim().toLowerCase().startsWith('<!doctype')) {
-      content = '<!DOCTYPE html>\n' + content;
-    }
-  }
-
-  let mimeType = 'text/plain;charset=utf-8';
-  if (filename.endsWith('.json')) mimeType = 'application/json;charset=utf-8';
-  else if (filename.endsWith('.html') || filename.endsWith('.htm')) mimeType = 'text/html;charset=utf-8';
-  else if (filename.endsWith('.js')) mimeType = 'application/javascript;charset=utf-8';
-  else if (filename.endsWith('.css')) mimeType = 'text/css;charset=utf-8';
-  else if (filename.endsWith('.py')) mimeType = 'text/x-python;charset=utf-8';
-  else if (filename.endsWith('.md')) mimeType = 'text/markdown;charset=utf-8';
-
-  saveOrDownloadFile(content, filename, mimeType);
-}
-
-function saveOrDownloadFile(content, filename, mimeType) {
-  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType || 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 60000);
-  showToast(`Saved ${filename}`, 'success');
 }
 
 function createSampleDocument(type, customContent = null, customTitle = 'IMPACT_Document') {

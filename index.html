@@ -2927,6 +2927,23 @@ function handleImportChatFile(event) {
   event.target.value = '';
 }
 
+let archiveSyncTimer = null;
+function archiveCurrentChatToServer() {
+  if (archiveSyncTimer) clearTimeout(archiveSyncTimer);
+  archiveSyncTimer = setTimeout(async () => {
+    const base = proxyBase();
+    const chat = state.currentChatId ? state.conversations[state.currentChatId] : null;
+    if (!base || !chat || !Array.isArray(chat.messages) || chat.messages.length === 0) return;
+    try {
+      await fetch(`${base}/api/archive_chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chat)
+      });
+    } catch (_) {}
+  }, 1000);
+}
+
 function saveConversations() { 
   try {
     localStorage.setItem('aiHub_conversations', JSON.stringify(state.conversations));
@@ -2936,7 +2953,8 @@ function saveConversations() {
       delete state.conversations[ids[0]]; 
       saveConversations(); 
     } 
-  } 
+  }
+  archiveCurrentChatToServer();
 }
 
 function renderChatList() {

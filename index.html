@@ -964,8 +964,71 @@
   .file-attachment-card:hover .att-remove, .att-wrapper:hover .att-remove { opacity: 1; }
   @media (hover: none) { .att-wrapper .att-remove { opacity: 1; } }
 
-  .streaming-cursor::after { content: '▋'; animation: blink 1s step-end infinite; color: var(--accent-primary); }
-  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+  .streaming-cursor::after {
+    content: '▋';
+    display: inline-block;
+    margin-left: 3px;
+    color: var(--accent-primary);
+    text-shadow: 0 0 10px var(--accent-glow);
+    animation: blink 0.8s steps(2, start) infinite;
+    vertical-align: baseline;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+  .ai-processing-hud {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    box-shadow: var(--shadow-sm);
+    animation: fadeIn 0.25s ease;
+  }
+  .ai-hud-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ai-hud-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    box-shadow: 0 0 8px var(--accent-glow);
+    animation: hudBounce 1.2s infinite ease-in-out;
+  }
+  .ai-hud-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .ai-hud-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes hudBounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1.25); opacity: 1; }
+  }
+  .ai-hud-Stage {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .ai-hud-metrics {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .message.assistant.is-processing .message-avatar {
+    animation: avatarPulseGlow 1.6s ease-in-out infinite;
+  }
+  @keyframes avatarPulseGlow {
+    0%, 100% { box-shadow: 0 0 12px rgba(255, 203, 5, 0.25); transform: scale(1); }
+    50% { box-shadow: 0 0 26px rgba(255, 203, 5, 0.75); transform: scale(1.06); }
+  }
 
   .input-area { padding: 16px 20px 20px; border-top: 1px solid var(--border-color); background: rgba(18,18,26,0.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
   body[data-theme="light"] .input-area, body[data-theme="off-white"] .input-area { background: rgba(255,255,255,0.9); }
@@ -2185,7 +2248,7 @@ let state = {
 const defaultSettings = {
   endpoint: 'http://192.168.1.195:8000/ollama', 
   temperature: 0.1, topP: 0.9, contextLength: 131072, repeatPenalty: 1.1, gpuLayers: 99,
-  systemPrompt: 'You are a helpful AI assistant with agentic capabilities. You can reason step by step, call tools when needed, and maintain context across conversations using memory. Never use emoji or emoticon in response. Never use ## headers, ** bolding, or -- dividers.',
+  systemPrompt: 'You are a helpful AI assistant and professional document writer. When asked to write a letter, email, memo, report, or document, output the actual complete formatted document directly. Never output numbered engineering reports, status summaries, or raw HTML tags like <div class="toast"> in your chat response. Never use emoji or emoticon in response. Never use ## headers, ** bolding, or -- dividers.',
   memoryContext: '', agentTools: JSON.stringify([{type:'function',function:{name:'web_search',description:'Search the web for information'}}],null,2)
 };
 
@@ -2212,6 +2275,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('coderPanel')?.classList.add('collapsed');
   state.sidebarOpen = false;
   state.coderOpen = false;
+  if (state.settings.systemPrompt && (
+    state.settings.systemPrompt.includes('autonomous coding agent') ||
+    state.settings.systemPrompt.includes('When you are done, report in plain text') ||
+    state.settings.systemPrompt.includes('You are a helpful AI assistant with agentic capabilities')
+  )) {
+    state.agentMode = 'chat';
+    state.settings.systemPrompt = defaultSettings.systemPrompt;
+    localStorage.setItem('aiHub_settings', JSON.stringify(state.settings));
+  }
   applyTheme(state.currentTheme);
   populateThemeGrids();
   populateModalThemeGrid();
@@ -3052,7 +3124,7 @@ without waiting for the user to answer questions. You finish when the work
 is done and verified, then report back.
 
 =====================================================================
-1. MANDATE
+1. CODER MANDATE
 =====================================================================
 Your job is to change the codebase so the user's request is satisfied.
 Not to explain, not to draft, not to ask for permission, not to stop at
@@ -3065,10 +3137,8 @@ Never block on a question that you could answer yourself.
 =====================================================================
 2. WORKFLOW
 =====================================================================
-Follow this sequence, and adapt it rather than skipping it:
+A. Follow this sequence, and adapt it rather than skipping it:
 
-A. READ THE TASK. Re-read the user request before touching anything.
-Identify: the outcome, the constraints, the acceptance criteria.
 
 B. INSPECT THE REPOSITORY.
 - Read the README and any docs that describe conventions.
@@ -3711,12 +3781,54 @@ async function sendMessage() {
   }
   apiMessages.push({ role: 'user', content: finalPrompt });
 
+  const msgContainerEl = document.querySelector(`[data-msg-id="${msgId}"]`);
+  const activeModelName = getCurrentModel();
+  const startTime = performance.now();
+  let hudTimer = null;
+  let tokenChunks = 0;
+  let thinkingChars = 0;
+  let hasStartedContent = false;
+
+  msgContainerEl?.classList.add('is-processing');
+  msgEl.innerHTML = `
+    <div class="ai-processing-hud" id="hud_${msgId}">
+      <div class="ai-hud-dots"><span></span><span></span><span></span></div>
+      <span class="ai-hud-Stage" id="hudStage_${msgId}">Connecting to ${escapeHtml(activeModelName)}...</span>
+      <span class="ai-hud-metrics" id="hudMetrics_${msgId}">0.0s</span>
+    </div>
+    <div class="answer-container streaming-cursor"></div>
+  `;
+  const hudEl = document.getElementById(`hud_${msgId}`);
+  const hudStageEl = document.getElementById(`hudStage_${msgId}`);
+  const hudMetricsEl = document.getElementById(`hudMetrics_${msgId}`);
+  const answerEl = msgEl.querySelector('.answer-container');
+  updateActivityLine(true);
+
+  hudTimer = setInterval(() => {
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+    if (!hasStartedContent && hudStageEl) {
+      if (thinkingChars > 0) {
+        hudStageEl.textContent = `Deep reasoning in progress (${thinkingChars.toLocaleString()} chars)...`;
+      } else if (elapsed < 2.5) {
+        hudStageEl.textContent = `Dispatching prompt to ${activeModelName}...`;
+      } else if (elapsed < 7.0) {
+        hudStageEl.textContent = `Processing context & loading VRAM...`;
+      } else {
+        hudStageEl.textContent = `Synthesizing response (${activeModelName} working)...`;
+      }
+    }
+    if (hudMetricsEl) {
+      const rate = tokenChunks > 0 ? `${(tokenChunks / Math.max(0.5, (performance.now() - startTime) / 1000)).toFixed(1)} tok/s · ` : '';
+      hudMetricsEl.textContent = `${rate}${elapsed}s`;
+    }
+  }, 100);
+
   try {
     const response = await fetch(getActiveOllamaBase() + '/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: getCurrentModel(),
+        model: activeModelName,
         messages: apiMessages,
         think: state.reasoningEnabled,
         stream: true
@@ -3729,10 +3841,6 @@ async function sendMessage() {
     const decoder = new TextDecoder();
     let fullContent = '';
 
-    msgEl.innerHTML = '<div class="answer-container streaming-cursor"></div>';
-    updateActivityLine(true);
-    const answerEl = msgEl.querySelector('.answer-container');
-
     while(true) {
       const {done, value} = await reader.read();
       if(done) break;
@@ -3741,8 +3849,14 @@ async function sendMessage() {
       for(const line of lines) {
         try {
           const json = JSON.parse(line);
+          if (json.message?.thinking) {
+            thinkingChars += json.message.thinking.length;
+          }
           if (json.message?.content) {
+            hasStartedContent = true;
+            tokenChunks++;
             fullContent += json.message.content;
+            if (hudStageEl) hudStageEl.textContent = `Streaming response...`;
             answerEl.innerHTML = formatMessage(fullContent);
             scrollToBottom();
           }
@@ -3750,6 +3864,9 @@ async function sendMessage() {
       }
     }
 
+    clearInterval(hudTimer);
+    msgContainerEl?.classList.remove('is-processing');
+    if (hudEl) hudEl.remove();
     answerEl.classList.remove('streaming-cursor');
     msgEl.dataset.rawContent = encodeURIComponent(fullContent);
     if (searchSources.length > 0) {
@@ -3758,8 +3875,11 @@ async function sendMessage() {
     chat.messages.push({ role: 'assistant', content: fullContent, ...(searchSources.length > 0 ? { sources: searchSources } : {}) });
     saveConversations();
   } catch(err) {
+    clearInterval(hudTimer);
+    msgContainerEl?.classList.remove('is-processing');
+    if (hudEl) hudEl.remove();
     updateActivityLine(false, err.name !== 'AbortError');
-    if (msgEl) msgEl.textContent = 'Error: ' + err.message;
+    if (msgEl) msgEl.textContent = err.name === 'AbortError' ? (answerEl?.innerText || '[Generation stopped]') : ('Error: ' + err.message);
   }
 
   state.isStreaming = false; 
@@ -4016,7 +4136,8 @@ function undoCoderEdit() {
 }
 
 function initCoderStudio() {
-  state.coderOpen = localStorage.getItem('aiHub_coderOpen') === 'true';
+  state.coderOpen = false;
+  localStorage.setItem('aiHub_coderOpen', 'false');
   const savedCode = localStorage.getItem('aiHub_coderContent') || '';
   const savedName = localStorage.getItem('aiHub_coderFilename') || 'index.html';
   const savedWidth = localStorage.getItem('aiHub_coderWidth');
@@ -4031,17 +4152,12 @@ function initCoderStudio() {
   if (savedWidth && panel) panel.style.width = savedWidth + 'px';
   if (textarea) textarea.value = savedCode;
   if (filenameInput) filenameInput.value = savedName;
-  if (state.coderOpen && panel) {
-    panel.classList.remove('collapsed');
-    toggleBtn?.classList.add('active-coder');
-  }
+  panel?.classList.add('collapsed');
+  toggleBtn?.classList.remove('active-coder');
   const toggleBtnLabel = document.getElementById('coderToggleBtnLabel');
   if (toggleBtnLabel) {
-    toggleBtnLabel.textContent = state.coderOpen ? 'Close Right Coder Studio' : 'Open Right Coder Studio';
+    toggleBtnLabel.textContent = 'Open Right Coder Studio';
   }
-  updateCoderLineNumbers();
-  renderCoderBackdrop();
-  updateSyntaxHighlighting();
 
   textarea?.addEventListener('input', () => {
     runCoderSearch(false);
@@ -4396,17 +4512,26 @@ function highlightCodeSegment(rawSegment, language) {
   return highlightSingleLang(escaped, language);
 }
 
-function updateSyntaxHighlighting() {
+let syntaxHighlightTimer = null;
+function updateSyntaxHighlighting(immediate = false) {
+  if (!immediate) {
+    if (syntaxHighlightTimer) clearTimeout(syntaxHighlightTimer);
+    syntaxHighlightTimer = setTimeout(() => updateSyntaxHighlighting(true), 60);
+    return;
+  }
   const textarea = document.getElementById('coderTextarea');
   const backdrop = document.getElementById('coderBackdrop');
   const filename = document.getElementById('coderFilename')?.value || '';
   if (!textarea || !backdrop) return;
+  if (!state.coderOpen) return;
 
   const code = textarea.value || '';
   const extension = filename.split('.').pop()?.toLowerCase();
 
   let language = 'plaintext';
-  if (extension === 'html' || extension === 'htm') language = 'html';
+  if (code.length > 90000) {
+    language = 'plaintext';
+  } else if (extension === 'html' || extension === 'htm') language = 'html';
   else if (extension === 'css') language = 'css';
   else if (extension === 'js' || extension === 'jsx' || extension === 'ts' || extension === 'tsx') language = 'javascript';
   else if (extension === 'py') language = 'python';
@@ -4542,7 +4667,7 @@ function toggleCoderPanel() {
   localStorage.setItem('aiHub_coderOpen', state.coderOpen);
   if (state.coderOpen) {
     updateCoderLineNumbers();
-    renderCoderBackdrop();
+    updateSyntaxHighlighting(true);
   } else {
     const sidebar = document.getElementById('sidebar');
     if (sidebar && sidebar.classList.contains('collapsed')) {

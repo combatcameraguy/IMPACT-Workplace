@@ -1107,7 +1107,7 @@
   .drop-zone { border: 2px dashed var(--border-color); border-radius: var(--radius-md); padding: 32px; text-align: center; color: var(--text-muted); transition: all 0.2s; cursor: pointer; display: flex; flex-direction: column; align-items: center; }
   .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent-primary); background: rgba(255,203,5,0.05); color: var(--text-secondary); }
 
-  .toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .toast-container { position: fixed; top: calc(var(--topbar-height) + env(safe-area-inset-top) + 12px); right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
   .toast { padding: 12px 20px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); font-size: 13px; display: flex; align-items: center; gap: 8px; animation: toastIn 0.3s ease; max-width: 360px; pointer-events: auto; }
   @keyframes toastIn { from{opacity:0;transform:translateX(20px);} to{opacity:1;transform:translateX(0);} }
   .toast.success { border-color: rgba(0,206,201,0.4); color: var(--accent-green); }
@@ -4604,13 +4604,12 @@ function updateSyntaxHighlighting(immediate = false) {
   const extension = filename.split('.').pop()?.toLowerCase();
 
   let language = 'plaintext';
-  if (code.length > 90000) {
-    language = 'plaintext';
-  } else if (extension === 'html' || extension === 'htm') language = 'html';
+  if (extension === 'html' || extension === 'htm') language = 'html';
   else if (extension === 'css') language = 'css';
   else if (extension === 'js' || extension === 'jsx' || extension === 'ts' || extension === 'tsx') language = 'javascript';
   else if (extension === 'py') language = 'python';
   else if (extension === 'json') language = 'json';
+  else if (/^\s*<!DOCTYPE\s+html|^\s*<html/i.test(code)) language = 'html';
 
   if (coderSearchMatches.length === 0) {
     backdrop.innerHTML = highlightCodeSegment(code, language) + '\n';

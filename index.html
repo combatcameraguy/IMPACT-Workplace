@@ -814,6 +814,99 @@
     background: var(--bg-tertiary);
   }
 
+  .doc-export-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-left: 4px;
+    padding-left: 6px;
+    border-left: 1px solid var(--border-color);
+  }
+
+  .doc-export-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 9px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .doc-export-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+    transform: translateY(-1px);
+  }
+  .doc-export-btn.primary-save {
+    background: var(--gradient-primary);
+    color: #1a1a2e;
+    border: none;
+    font-weight: 700;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .direct-file-card {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: rgba(0, 206, 201, 0.08);
+    border: 1px solid rgba(0, 206, 201, 0.35);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .direct-file-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .direct-file-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .direct-file-url {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 340px;
+  }
+  .direct-file-btn {
+    padding: 7px 14px;
+    background: var(--gradient-primary);
+    color: #1a1a2e;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+    box-shadow: var(--shadow-glow);
+    transition: all 0.2s;
+  }
+  .direct-file-btn:hover {
+    transform: translateY(-1px);
+  }
+
   .inline-edit-box {
     width: 100%;
     min-width: 260px;
@@ -1940,6 +2033,7 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
 // ===== INLINE EDIT & RESUBMIT =====
@@ -2185,13 +2279,36 @@ function proxyBase() {
   return window.location.protocol.startsWith('http') ? window.location.origin : null;
 }
 
+const OFFICIAL_FORM_REGISTRY = [
+  { pattern: /\bw[\s-]?9\b/i, title: 'IRS Form W-9 (Official Blank PDF)', url: 'https://www.irs.gov/pub/irs-pdf/fw9.pdf', filename: 'IRS_Form_W-9.pdf' },
+  { pattern: /\bw[\s-]?4\b/i, title: 'IRS Form W-4 (Official Blank PDF)', url: 'https://www.irs.gov/pub/irs-pdf/fw4.pdf', filename: 'IRS_Form_W-4.pdf' },
+  { pattern: /\b1099[\s-]?nec\b/i, title: 'IRS Form 1099-NEC (Official Blank PDF)', url: 'https://www.irs.gov/pub/irs-pdf/f1099nec.pdf', filename: 'IRS_Form_1099-NEC.pdf' },
+  { pattern: /\bi[\s-]?9\b/i, title: 'USCIS Form I-9 (Official Employment Eligibility PDF)', url: 'https://www.uscis.gov/sites/default/files/document/forms/i-9.pdf', filename: 'USCIS_Form_I-9.pdf' },
+  { pattern: /\bsf[\s-]?424\b/i, title: 'Federal Grant Form SF-424 (Application for Federal Assistance)', url: 'https://apply07.grants.gov/apply/forms/sample/SF424_4_0-V4.0.pdf', filename: 'Federal_Form_SF-424.pdf' }
+];
+
+function detectOfficialFormRequest(rawText) {
+  const matches = [];
+  for (const item of OFFICIAL_FORM_REGISTRY) {
+    if (item.pattern.test(rawText)) {
+      matches.push({ index: 0, title: item.title, url: item.url, filename: item.filename, isDirectFile: true });
+    }
+  }
+  return matches;
+}
+
 function buildSearchQuery(rawText) {
+  const isFormRequest = /\b(blank|form|pdf|download|w-?9|w-?4|1099|sf-?424|i-?9|\.gov)\b/i.test(rawText);
   const cleaned = rawText
-    .replace(/^(can you|please|could you|i need to|help me|tell me about|search for|find|look up)\s+/i, '')
+    .replace(/^(can you|please|could you|i need to|help me|tell me about|search for|find|look up|provide a|give me a)\s+/i, '')
     .replace(/[^\w\s?.,'-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return cleaned.substring(0, 350);
+  const baseQuery = cleaned.substring(0, 320);
+  if (isFormRequest && !/filetype:pdf/i.test(baseQuery) && /\b(blank|form|w-?9|w-?4|sf-?424|i-?9)\b/i.test(baseQuery)) {
+    return `${baseQuery} site:.gov filetype:pdf`;
+  }
+  return baseQuery;
 }
 
 async function scrapeWebPage(url) {
@@ -2262,16 +2379,93 @@ async function performLiveWebSearch(query) {
   return { text: '', results: [] };
 }
 
+function isDirectDocumentUrl(url) {
+  if (!url) return false;
+  return /\.(pdf|docx?|xlsx?|csv|pptx?|rtf|txt|zip)(\?.*)?$/i.test(url);
+}
+
+async function downloadRemoteDocument(url, suggestedFilename = '') {
+  try {
+    showToast('Fetching document for download...', 'info');
+    let filename = suggestedFilename;
+    if (!filename) {
+      try {
+        const pathname = new URL(url).pathname;
+        filename = pathname.split('/').pop() || 'Downloaded_Document.pdf';
+      } catch (_) {
+        filename = 'Downloaded_Document.pdf';
+      }
+    }
+
+    const base = proxyBase();
+    if (base) {
+      try {
+        const proxyRes = await fetch(`${base}/api/proxy?url=${encodeURIComponent(url)}&raw=1`, { signal: AbortSignal.timeout(15000) });
+        if (proxyRes.ok && !proxyRes.headers.get('content-type')?.includes('application/json')) {
+          const blob = await proxyRes.blob();
+          await saveOrDownloadFile(blob, filename, blob.type || 'application/pdf');
+          return;
+        }
+      } catch (_) {}
+    }
+
+    try {
+      const directRes = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(12000) });
+      if (directRes.ok) {
+        const blob = await directRes.blob();
+        await saveOrDownloadFile(blob, filename, blob.type || 'application/pdf');
+        return;
+      }
+    } catch (_) {}
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 2000);
+    showToast(`Opened "${filename}" for saving`, 'success');
+  } catch (err) {
+    showToast('Error downloading file: ' + err.message, 'error');
+  }
+}
+
 function renderSourcesHTML(results) {
   if (!results || results.length === 0) return '';
   const valid = results.filter(r => r.url);
   if (valid.length === 0) return '';
+
+  const directFiles = valid.filter(r => r.isDirectFile || isDirectDocumentUrl(r.url));
+  const directCardsHtml = directFiles.map(file => {
+    const safeUrl = escapeHtml(file.url);
+    const safeTitle = escapeHtml(file.title || 'Official Document Download');
+    const safeName = escapeHtml(file.filename || '');
+    return `
+      <div class="direct-file-card">
+        <div class="direct-file-info">
+          <span style="color:var(--accent-green);display:flex;">${ICONS.fileText}</span>
+          <div style="min-width:0;">
+            <div class="direct-file-title">${safeTitle}</div>
+            <div class="direct-file-url">${safeUrl}</div>
+          </div>
+        </div>
+        <button class="direct-file-btn" onclick="downloadRemoteDocument('${safeUrl}', '${safeName}')">
+          ${ICONS.download}
+          <span>Save File</span>
+        </button>
+      </div>
+    `;
+  }).join('');
+
   const chips = valid.map((r, idx) => {
     let label = r.title || r.url;
     try { if (!r.title) label = new URL(r.url).hostname.replace(/^www\./, ''); } catch (_) {}
     return `<a class="web-source-chip" href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(r.url)}">[${idx + 1}] ${escapeHtml(label)}</a>`;
   }).join('');
-  return `<div class="web-sources-box"><div class="web-sources-title">${ICONS.globe} Web Sources</div><div class="web-sources-list">${chips}</div></div>`;
+
+  return `${directCardsHtml}<div class="web-sources-box"><div class="web-sources-title">${ICONS.globe} Web Sources</div><div class="web-sources-list">${chips}</div></div>`;
 }
 
 let currentStatusTracker = null;
@@ -3457,7 +3651,7 @@ async function sendMessage() {
   if (docContextBlocks.length > 0) {
     finalPrompt = `${docContextBlocks.join('\n\n')}\n\nUser Query:\n${finalPrompt}`;
   }
-  let searchSources = [];
+  let searchSources = detectOfficialFormRequest(text);
   if (state.isWebConnectivityActive && state.webScrapeEnabled) {
     const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
     if (urlMatch) {
@@ -3465,7 +3659,7 @@ async function sendMessage() {
       updateSearchStatus(`Scraping ${targetUrl} via Tavily...`);
       const scrapeRes = await scrapeWebPage(targetUrl);
       if (scrapeRes.ok && scrapeRes.text) {
-        searchSources = [{ title: targetUrl, url: targetUrl }];
+        searchSources = [...searchSources, { title: targetUrl, url: targetUrl }];
         finalPrompt += `\n\n[Web Page Content from ${targetUrl}]:\n${scrapeRes.text.substring(0, 15000)}\n\nInstruction: Use the scraped content above to answer and include the source URL (${targetUrl}) in your response.`;
         updateSearchStatus("Scrape complete.", true);
       } else {
@@ -3473,13 +3667,17 @@ async function sendMessage() {
       }
     } else {
       const searchRes = await performLiveWebSearch(text);
-      searchSources = searchRes.results || [];
+      searchSources = [...searchSources, ...(searchRes.results || [])];
       if (searchRes.text) {
         finalPrompt += `\n\n[Live Tavily Web Search Results]:\n${searchRes.text}\n\nInstruction: Use the search results above to provide a thorough, accurate answer. You MUST cite your sources inline and include the full https:// URL for every source you reference.`;
       } else {
         updateSearchStatus("Search complete (no results).", true);
       }
     }
+  }
+  if (searchSources.some(s => s.isDirectFile)) {
+    const formList = searchSources.filter(s => s.isDirectFile).map(s => `${s.title}: ${s.url}`).join('\n');
+    finalPrompt += `\n\n[Verified Official Government Form Links]:\n${formList}\nInstruction: Provide the direct official link(s) clearly and let the user know they can click the "Save File" button below to download the blank form directly to their PC or iOS device.`;
   }
 
   const msgId = 'msg_' + Date.now();
@@ -3491,16 +3689,25 @@ async function sendMessage() {
   const msgEl = document.querySelector(`[data-msg-id="${msgId}"] .message-text`);
 
   let apiMessages = [];
-  let systemContent = state.settings.systemPrompt || defaultSettings.systemPrompt;
-  if (state.reasoningEnabled) {
+  const isDocWritingRequest = /\b(write|draft|create|compose|generate|prepare|format|make)\b[\s\S]{0,60}\b(letter|email|memo|notice|report|document|proposal|contract|agreement|note|message)\b|\b(dear|sincerely|signed|to mr|to mrs|to ms|to dr)\b/i.test(text);
+  let systemContent = isDocWritingRequest
+    ? 'You are an expert professional letter and document writer. Your ONLY job is to write the complete, properly formatted letter, email, or document requested by the user.\n\nSTRICT RULES:\n1. Output ONLY the actual letter or document text from start to finish (Date, Salutation, Body Paragraphs, Closing, and Signature).\n2. NEVER output numbered status reports (1. Changed..., 2. Verified..., 3. Assumption...).\n3. NEVER describe what you did—actually write the letter itself in first-person voice matching the user request.\n4. NEVER output HTML tags such as <div class="toast">.'
+    : (state.settings.systemPrompt || defaultSettings.systemPrompt);
+  if (state.reasoningEnabled && !isDocWritingRequest) {
     systemContent += '\n\nExtended Reasoning Enabled: Think carefully step-by-step through complex problems before delivering your final answer.';
   }
   if (systemContent) {
     apiMessages.push({ role: 'system', content: systemContent });
   }
   if (state.preserveThinking) {
-    const history = chat.messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
+    const history = chat.messages
+      .slice(0, -1)
+      .filter(m => !/1\.\s*Changed|2\.\s*Verified|<div class=["']toast/i.test(m.content || ''))
+      .map(m => ({ role: m.role, content: m.content }));
     apiMessages = apiMessages.concat(history);
+  }
+  if (isDocWritingRequest) {
+    finalPrompt += '\n\n[INSTRUCTION: Write ONLY the complete, formatted letter/document text itself (including Date, Salutation, Body paragraphs, Sign-off, and Signature). Do NOT output a numbered report, summary, or HTML tags.]';
   }
   apiMessages.push({ role: 'user', content: finalPrompt });
 
@@ -3544,6 +3751,7 @@ async function sendMessage() {
     }
 
     answerEl.classList.remove('streaming-cursor');
+    msgEl.dataset.rawContent = encodeURIComponent(fullContent);
     if (searchSources.length > 0) {
       msgEl.insertAdjacentHTML('beforeend', renderSourcesHTML(searchSources));
     }
@@ -3595,6 +3803,15 @@ function appendMessageToUI(role, content, empty = false, msgId = null, sources =
   const editBtnHtml = role === 'user' 
     ? `<button class="edit-query-btn" onclick="editMessage(this)" title="Edit & Resubmit">${ICONS.edit}</button>` 
     : '';
+
+  const docActionsHtml = role === 'assistant'
+    ? `<div class="doc-export-group">
+        <button class="doc-export-btn primary-save" onclick="exportMessageDocument(this, 'doc')" title="Save formatted Word Document (.doc) with zero browser bloat">${ICONS.download}<span>Save Word (.doc)</span></button>
+        <button class="doc-export-btn" onclick="exportMessageDocument(this, 'pdf')" title="Download clean binary PDF (.pdf) with no browser headers/footers">${ICONS.download}<span>Save PDF</span></button>
+        <button class="doc-export-btn" onclick="exportMessageDocument(this, 'xlsx')" title="Export tables or structured lines to Excel (.xlsx)">${ICONS.download}<span>Save XLSX</span></button>
+        <button class="doc-export-btn" onclick="exportMessageDocument(this, 'print')" title="Open clean printable view"><span>Print</span></button>
+      </div>`
+    : '';
     
   const safeRawContent = encodeURIComponent(content || '');
   const sourcesHtml = (sources && sources.length > 0) ? renderSourcesHTML(sources) : '';
@@ -3607,6 +3824,7 @@ function appendMessageToUI(role, content, empty = false, msgId = null, sources =
         <div class="message-actions">
           ${editBtnHtml}
           <button class="copy-response-btn" onclick="copyResponse(this)" title="Copy Text">${copySvgIcon}</button>
+          ${docActionsHtml}
         </div>
       </div>
     </div>`;
@@ -4637,32 +4855,197 @@ async function saveOrDownloadFile(content, filename, mimeType) {
   showToast(`Saved "${filename}"`, 'success');
 }
 
-function createSampleDocument(type, customContent = null, customTitle = 'IMPACT_Document') {
+function cleanDocumentBody(rawText) {
+  if (!rawText) return '';
+  let text = rawText
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<div[^>]*class=["'][^"']*toast[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<\/?[a-zA-Z][^>]*>/g, '')
+    .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
+    .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '')
+    .replace(/\r?\n?Web Sources\s*(\[\d+\][^\n]+)+$/g, '')
+    .trim();
+
+  const letterStartMatch = text.match(/(?:^|\n)((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}|Date:|Subject:|MEMORANDUM|Dear\s+[A-Z]|Hi\s+[A-Z]|Hello\s+[A-Z]|To\s+[A-Z])/);
+  if (letterStartMatch && letterStartMatch.index !== undefined && letterStartMatch.index < 240) {
+    const prefix = text.slice(0, letterStartMatch.index).trim();
+    if (/^(here is|sure|certainly|below is|i have|drafted)/i.test(prefix)) {
+      text = text.slice(letterStartMatch.index).trim();
+    }
+  }
+  return text;
+}
+
+function escapeRtfText(str) {
+  let out = '';
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    const code = str.charCodeAt(i);
+    if (ch === '\\') out += '\\\\';
+    else if (ch === '{') out += '\\{';
+    else if (ch === '}') out += '\\}';
+    else if (code > 127) out += `\\u${code}?`;
+    else out += ch;
+  }
+  return out;
+}
+
+function buildTrueRtfDocument(plainText) {
+  const cleaned = cleanDocumentBody(plainText).replace(/\r\n/g, '\n');
+  const blocks = cleaned.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
+
+  const firstBlock = blocks[0] || '';
+  const hasDate = /\b(January|February|March|April|May|June|July|August|September|October|November|December|\d{1,2}\/\d{1,2}\/\d{2,4})\b/i.test(firstBlock);
+  const isLetter = /^(Dear|Hi|Hello|To\s+Mr|To\s+Mrs|To\s+Ms|Mr\.|Mrs\.|Ms\.)/i.test(firstBlock);
+  if (isLetter && !hasDate) {
+    const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    blocks.unshift(todayFormatted);
+  }
+
+  const rtfParagraphs = blocks.map((block, idx) => {
+    const lines = block.split('\n').map(l => escapeRtfText(l.trim()));
+    const isHeaderLine = /^(Subject:|RE:|MEMORANDUM|TO:|FROM:|DATE:)/i.test(block);
+    const isSalutation = /^(Dear|Hi|Hello|To\s+)/i.test(block);
+    const isSignOff = /^(Sincerely|Best regards|Regards|Warm regards|Respectfully|Signed|Thank you|Thanks|Cheers|Yours truly)/i.test(block) || (idx === blocks.length - 1 && lines.length <= 3 && block.length < 90);
+
+    if (isHeaderLine) {
+      return `\\pard\\sa200\\sl276\\slmult1\\b\\f0\\fs24 ${lines.join('\\line ')}\\b0\\par`;
+    }
+    if (isSalutation) {
+      return `\\pard\\sb120\\sa200\\sl276\\slmult1\\f0\\fs24 ${lines.join('\\line ')}\\par`;
+    }
+    if (isSignOff) {
+      return `\\pard\\sb240\\sa120\\sl276\\slmult1\\f0\\fs24 ${lines.join('\\line\\b ')}\\b0\\par`;
+    }
+    return `\\pard\\sa200\\sl276\\slmult1\\f0\\fs24 ${lines.join('\\line ')}\\par`;
+  });
+
+  return [
+    '{\\rtf1\\ansi\\deff0',
+    '{\\fonttbl{\\f0\\fswiss\\fcharset0 Calibri;}{\\f1\\froman\\fcharset0 Georgia;}}',
+    '\\paperw12240\\paperh15840\\margl1440\\margr1440\\margt1440\\margb1440',
+    '\\viewkind4\\uc1',
+    rtfParagraphs.join('\n'),
+    '}'
+  ].join('\n');
+}
+
+function deriveDocumentTitle(text) {
+  const firstLine = (text || '').split('\n').map(l => l.trim()).find(l => l.length > 2) || 'IMPACT_Document';
+  const slug = firstLine
+    .replace(/^(subject:|re:|title:)\s*/i, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .substring(0, 42);
+  return slug || 'IMPACT_Document';
+}
+
+function extractMessageTextForExport(btn) {
+  const msgContent = btn.closest('.message-content');
+  const msgTextEl = msgContent?.querySelector('.message-text');
+  if (!msgTextEl) return '';
+
+  const rawAttr = msgTextEl.dataset.rawContent ? decodeURIComponent(msgTextEl.dataset.rawContent) : '';
+  if (rawAttr && rawAttr.trim()) return cleanDocumentBody(rawAttr);
+
+  const clone = msgTextEl.cloneNode(true);
+  clone.querySelectorAll('.web-sources-box, .direct-file-card, .code-block-header, .code-block-footer').forEach(el => el.remove());
+  return cleanDocumentBody(clone.innerText || '');
+}
+
+async function exportMessageDocument(btn, format) {
+  const text = extractMessageTextForExport(btn);
+  if (!text) {
+    showToast('No content to export', 'error');
+    return;
+  }
+  const baseTitle = deriveDocumentTitle(text);
+  await createSampleDocument(format, text, baseTitle);
+}
+
+async function createSampleDocument(type, customContent = null, customTitle = 'IMPACT_Document') {
   const chat = state.conversations[state.currentChatId];
   const lastAssistantMsg = chat?.messages ? [...chat.messages].reverse().find(m => m.role === 'assistant')?.content : '';
-  const bodyText = customContent || lastAssistantMsg || 'IMPACT Workspace Generated Document';
+  const bodyText = cleanDocumentBody(customContent || lastAssistantMsg || 'IMPACT Workspace Generated Document');
   const timestamp = new Date().toISOString().slice(0, 10);
+  const filenameBase = `${customTitle}_${timestamp}`;
 
-  if (type === 'text') {
-    saveOrDownloadFile(bodyText, `${customTitle}_${timestamp}.txt`, 'text/plain;charset=utf-8');
-  } else if (type === 'word') {
-    const docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${escapeHtml(customTitle)}</title></head><body style="font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;">${escapeHtml(bodyText).replace(/\n/g, '<br>')}</body></html>`;
-    saveOrDownloadFile(docHtml, `${customTitle}_${timestamp}.doc`, 'application/msword');
-  } else if (type === 'presentation') {
-    const slides = bodyText.split(/\n{2,}/).filter(Boolean);
-    const slideHtml = slides.map((s, i) => `<section style="padding:40px;margin:20px auto;max-width:800px;min-height:420px;border:1px solid #ccc;border-radius:12px;page-break-after:always;font-family:Inter,sans-serif;"><h2>Slide ${i + 1}</h2><p style="white-space:pre-wrap;font-size:18px;line-height:1.6;">${escapeHtml(s)}</p></section>`).join('');
-    const deck = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)} Presentation</title></head><body style="background:#f5f5fa;margin:0;padding:20px;">${slideHtml}</body></html>`;
-    saveOrDownloadFile(deck, `${customTitle}_${timestamp}_slides.html`, 'text/html;charset=utf-8');
-  } else if (type === 'pdf') {
-    const printWin = window.open('', '_blank');
-    if (!printWin) {
-      showToast('Allow popups to export PDF', 'error');
+  if (type === 'word' || type === 'doc') {
+    const rtfContent = buildTrueRtfDocument(bodyText);
+    await saveOrDownloadFile(rtfContent, `${filenameBase}.doc`, 'application/rtf');
+    return;
+  }
+
+  if (type === 'pdf') {
+    if (window.jspdf && window.jspdf.jsPDF) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 54; // 0.75 in
+      const usableWidth = pageWidth - margin * 2;
+      const lineHeight = 16;
+      let cursorY = margin;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.setTextColor(15, 15, 15);
+
+      const rawLines = bodyText.split(/\r?\n/);
+      for (const line of rawLines) {
+        const wrapped = doc.splitTextToSize(line || ' ', usableWidth);
+        for (const wLine of wrapped) {
+          if (cursorY + lineHeight > pageHeight - margin) {
+            doc.addPage();
+            cursorY = margin;
+          }
+          doc.text(wLine, margin, cursorY);
+          cursorY += lineHeight;
+        }
+      }
+
+      const pdfBlob = doc.output('blob');
+      await saveOrDownloadFile(pdfBlob, `${filenameBase}.pdf`, 'application/pdf');
       return;
     }
-    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)}</title><style>body{font-family:Inter,Arial,sans-serif;padding:40px;line-height:1.6;color:#111;white-space:pre-wrap;}</style></head><body>${escapeHtml(bodyText)}</body></html>`);
+    type = 'print';
+  }
+
+  if (type === 'xlsx') {
+    if (!window.XLSX) {
+      showToast('Excel library not loaded', 'error');
+      return;
+    }
+    const rows = bodyText.split(/\r?\n/).filter(l => l.trim()).map(line => {
+      if (line.includes('|')) {
+        return line.split('|').map(c => c.trim()).filter((_, idx, arr) => !(idx === 0 && !arr[0]) && !(idx === arr.length - 1 && !arr[arr.length - 1]));
+      }
+      if (line.includes('\t')) return line.split('\t').map(c => c.trim());
+      if (line.includes(':') && line.indexOf(':') < 40) {
+        const idx = line.indexOf(':');
+        return [line.slice(0, idx).trim(), line.slice(idx + 1).trim()];
+      }
+      return [line];
+    });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows.length ? rows : [[bodyText]]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Document_Data');
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    await saveOrDownloadFile(blob, `${filenameBase}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return;
+  }
+
+  if (type === 'print') {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      showToast('Allow popups to open printable view', 'error');
+      return;
+    }
+    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(customTitle)}</title><style>@page{margin:0.75in;}body{font-family:Calibri,Inter,Arial,sans-serif;font-size:11pt;line-height:1.55;color:#000;margin:0;white-space:pre-wrap;}</style></head><body>${escapeHtml(bodyText)}</body></html>`);
     printWin.document.close();
     printWin.focus();
-    setTimeout(() => { printWin.print(); }, 300);
+    setTimeout(() => { printWin.print(); }, 250);
   }
 }
 

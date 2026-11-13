@@ -5050,7 +5050,7 @@ async function saveOrDownloadFile(content, filename, mimeType) {
     try {
       const file = new File([blob], filename, { type: type.split(';')[0] });
       if (navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: filename });
+        await navigator.share({ files: [file] });
         showToast(`Saved "${filename}"`, 'success');
         return;
       }
@@ -5074,7 +5074,7 @@ async function saveOrDownloadFile(content, filename, mimeType) {
   showToast(`Saved "${filename}"`, 'success');
 }
 
-function cleanDocumentBody(rawText) {
+function cleanDocumentBody(rawText, preserveTables = false) {
   if (!rawText) return '';
   let text = rawText
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
@@ -5082,8 +5082,26 @@ function cleanDocumentBody(rawText) {
     .replace(/<\/?[a-zA-Z][^>]*>/g, '')
     .replace(/^(?:[a-zA-Z0-9_-]+)?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*\r?\n?/gm, '')
     .replace(/\r?\n?\s*To Find\s*To Replace\s*To Editor\s*Copy\s*$/gm, '')
-    .replace(/\r?\n?Web Sources\s*(\[\d+\][^\n]+)+$/g, '')
-    .trim();
+    .replace(/\r?\n?Web Sources\s*(\[\d+\][^\n]+)+$/g, '');
+
+  text = text
+    .replace(/^\s*#{1,6}\s+/gm, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/^\s*[-*_]{3,}\s*$/gm, '')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1 ($2)');
+
+  if (!preserveTables) {
+    text = text
+      .replace(/^\s*\|?(?:\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?\s*$/gm, '')
+      .replace(/^\s*\|\s*(.*?)\s*\|\s*$/gm, (_, row) =>
+        row.split(/\s*\|\s*/).filter(Boolean).join('   |   ')
+      );
+  }
+
+  text = text.replace(/\n{3,}/g, '\n\n').trim();
 
   const letterStartMatch = text.match(/(?:^|\n)((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}|Date:|Subject:|MEMORANDUM|Dear\s+[A-Z]|Hi\s+[A-Z]|Hello\s+[A-Z]|To\s+[A-Z])/);
   if (letterStartMatch && letterStartMatch.index !== undefined && letterStartMatch.index < 240) {
@@ -5150,7 +5168,8 @@ function buildTrueRtfDocument(plainText) {
 }
 
 function deriveDocumentTitle(text) {
-  const firstLine = (text || '').split('\n').map(l => l.trim()).find(l => l.length > 2) || 'IMPACT_Document';
+  const cleaned = cleanDocumentBody(text);
+  const firstLine = (cleaned || '').split('\n').map(l => l.trim()).find(l => l.length > 2) || 'IMPACT_Document';
   const slug = firstLine
     .replace(/^(subject:|re:|title:)\s*/i, '')
     .replace(/[^a-zA-Z0-9_-]+/g, '_')
@@ -5159,33 +5178,49 @@ function deriveDocumentTitle(text) {
   return slug || 'IMPACT_Document';
 }
 
-function extractMessageTextForExport(btn) {
+function extractMessageTextForExport(btn, preserveTables = false) {
   const msgContent = btn.closest('.message-content');
   const msgTextEl = msgContent?.querySelector('.message-text');
   if (!msgTextEl) return '';
 
   const rawAttr = msgTextEl.dataset.rawContent ? decodeURIComponent(msgTextEl.dataset.rawContent) : '';
-  if (rawAttr && rawAttr.trim()) return cleanDocumentBody(rawAttr);
+  if (rawAttr && rawAttr.trim()) return cleanDocumentBody(rawAttr, preserveTables);
 
   const clone = msgTextEl.cloneNode(true);
   clone.querySelectorAll('.web-sources-box, .direct-file-card, .code-block-header, .code-block-footer').forEach(el => el.remove());
-  return cleanDocumentBody(clone.innerText || '');
+  return cleanDocumentBody(clone.innerText || '', preserveTables);
 }
 
 async function exportMessageDocument(btn, format) {
-  const text = extractMessageTextForExport(btn);
-  if (!text) {
+  const rawOrClean = extractMessageTextForExport(btn, true);
+  if (!rawOrClean) {
     showToast('No content to export', 'error');
     return;
   }
-  const baseTitle = deriveDocumentTitle(text);
-  await createSampleDocument(format, text, baseTitle);
+  const baseTitle = deriveDocumentTitle(rawOrClean);
+  const msgContent = btn.closest('.message-content');
+  const msgTextEl = msgContent?.querySelector('.message-text');
+  const rawMarkdown = msgTextEl?.dataset.rawContent ? decodeURIComponent(msgTextEl.dataset.rawContent) : rawOrClean;
+  await createSampleDocument(format, rawMarkdown, baseTitle);
+}
+
+function parseCleanMarkdownTableRow(line) {
+  return line
+    .trim()
+    .replace(/^\||\|$/g, '')
+    .split('|')
+    .map(c => c.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').trim());
+}
+
+function isMarkdownDividerRow(line) {
+  return /^\s*\|?(?:\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?\s*$/.test(line);
 }
 
 async function createSampleDocument(type, customContent = null, customTitle = 'IMPACT_Document') {
   const chat = state.conversations[state.currentChatId];
   const lastAssistantMsg = chat?.messages ? [...chat.messages].reverse().find(m => m.role === 'assistant')?.content : '';
-  const bodyText = cleanDocumentBody(customContent || lastAssistantMsg || 'IMPACT Workspace Generated Document');
+  const sourceMarkdown = customContent || lastAssistantMsg || 'IMPACT Workspace Generated Document';
+  const bodyText = cleanDocumentBody(sourceMarkdown, false);
   const timestamp = new Date().toISOString().slice(0, 10);
   const filenameBase = `${customTitle}_${timestamp}`;
 
@@ -5201,26 +5236,137 @@ async function createSampleDocument(type, customContent = null, customTitle = 'I
       const doc = new jsPDF({ unit: 'pt', format: 'letter' });
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 54; // 0.75 in
+      const margin = 54;
       const usableWidth = pageWidth - margin * 2;
-      const lineHeight = 16;
       let cursorY = margin;
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(11);
-      doc.setTextColor(15, 15, 15);
+      const ensureSpace = (needed) => {
+        if (cursorY + needed > pageHeight - margin) {
+          doc.addPage();
+          cursorY = margin;
+        }
+      };
 
-      const rawLines = bodyText.split(/\r?\n/);
-      for (const line of rawLines) {
-        const wrapped = doc.splitTextToSize(line || ' ', usableWidth);
-        for (const wLine of wrapped) {
-          if (cursorY + lineHeight > pageHeight - margin) {
-            doc.addPage();
-            cursorY = margin;
+      const cleanInline = (str) => (str || '')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/__([^_]+)__/g, '$1')
+        .replace(/`([^`\n]+)`/g, '$1')
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1 ($2)')
+        .trim();
+
+      const rawSourceLines = sourceMarkdown
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<\/?[a-zA-Z][^>]*>/g, '')
+        .replace(/\r?\n?Web Sources\s*(\[\d+\][^\n]+)+$/g, '')
+        .trim()
+        .split(/\r?\n/);
+
+      let i = 0;
+      while (i < rawSourceLines.length) {
+        const line = rawSourceLines[i];
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+          cursorY += 8;
+          i++;
+          continue;
+        }
+
+        if (/^[-*_]{3,}$/.test(trimmed)) {
+          ensureSpace(16);
+          doc.setDrawColor(210, 210, 210);
+          doc.setLineWidth(0.75);
+          doc.line(margin, cursorY, pageWidth - margin, cursorY);
+          cursorY += 12;
+          i++;
+          continue;
+        }
+
+        if (trimmed.includes('|') && i + 1 < rawSourceLines.length && isMarkdownDividerRow(rawSourceLines[i + 1])) {
+          const tableRows = [parseCleanMarkdownTableRow(trimmed)];
+          i += 2;
+          while (i < rawSourceLines.length && rawSourceLines[i].trim().includes('|')) {
+            if (!isMarkdownDividerRow(rawSourceLines[i])) {
+              tableRows.push(parseCleanMarkdownTableRow(rawSourceLines[i]));
+            }
+            i++;
           }
+
+          const colCount = Math.max(...tableRows.map(r => r.length), 1);
+          const colWidth = usableWidth / colCount;
+          const cellPad = 5;
+
+          tableRows.forEach((row, rIdx) => {
+            doc.setFont('helvetica', rIdx === 0 ? 'bold' : 'normal');
+            doc.setFontSize(9.5);
+            const wrappedCells = [];
+            let maxLines = 1;
+            for (let c = 0; c < colCount; c++) {
+              const cellText = cleanInline(row[c] || '');
+              const splitCell = doc.splitTextToSize(cellText || ' ', colWidth - cellPad * 2);
+              wrappedCells.push(splitCell);
+              if (splitCell.length > maxLines) maxLines = splitCell.length;
+            }
+            const rowHeight = maxLines * 12 + cellPad * 2;
+            ensureSpace(rowHeight + 4);
+
+            if (rIdx === 0) {
+              doc.setFillColor(240, 242, 246);
+              doc.rect(margin, cursorY, usableWidth, rowHeight, 'F');
+            }
+            doc.setDrawColor(205, 205, 215);
+            doc.setLineWidth(0.5);
+            doc.rect(margin, cursorY, usableWidth, rowHeight, 'S');
+
+            for (let c = 0; c < colCount; c++) {
+              const cellX = margin + c * colWidth;
+              if (c > 0) doc.line(cellX, cursorY, cellX, cursorY + rowHeight);
+              const linesInCell = wrappedCells[c];
+              linesInCell.forEach((cl, lIdx) => {
+                doc.setTextColor(20, 20, 20);
+                doc.text(cl, cellX + cellPad, cursorY + cellPad + 9 + lIdx * 12);
+              });
+            }
+            cursorY += rowHeight;
+          });
+          cursorY += 10;
+          continue;
+        }
+
+        const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          const headingText = cleanInline(headingMatch[2]);
+          const fontSize = level === 1 ? 16 : level === 2 ? 13.5 : 11.5;
+          const lineHeight = fontSize + 5;
+          cursorY += level === 1 ? 8 : 5;
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(fontSize);
+          doc.setTextColor(15, 15, 15);
+          const wrapped = doc.splitTextToSize(headingText, usableWidth);
+          for (const wLine of wrapped) {
+            ensureSpace(lineHeight);
+            doc.text(wLine, margin, cursorY);
+            cursorY += lineHeight;
+          }
+          cursorY += 2;
+          i++;
+          continue;
+        }
+
+        const cleanLine = cleanInline(trimmed.replace(/^>\s*/, '').replace(/^[-*]\s+/, '• '));
+        const isBoldLine = /^\*\*.*\*\*$/.test(trimmed) || /^(Status:|Entity:|Subject:|Date:|TOTAL)/i.test(cleanLine);
+        doc.setFont('helvetica', isBoldLine ? 'bold' : 'normal');
+        doc.setFontSize(10.5);
+        doc.setTextColor(20, 20, 20);
+        const lineHeight = 15;
+        const wrapped = doc.splitTextToSize(cleanLine || ' ', usableWidth);
+        for (const wLine of wrapped) {
+          ensureSpace(lineHeight);
           doc.text(wLine, margin, cursorY);
           cursorY += lineHeight;
         }
+        i++;
       }
 
       const pdfBlob = doc.output('blob');

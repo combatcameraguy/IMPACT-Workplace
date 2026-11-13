@@ -3823,7 +3823,7 @@ async function sendMessage() {
   }
 
   let systemContent = isDocWritingRequest
-    ? 'You are an expert professional letter and document writer. Write the complete, properly formatted letter, email, or document requested by the user.\n\nSTRICT RULES:\n1. Output ONLY the actual letter or document text from start to finish (Date, Salutation, Body Paragraphs, Closing, and Signature).\n2. NEVER output numbered status reports (1. Changed..., 2. Verified..., 3. Assumption...).\n3. NEVER output HTML tags such as <div class="toast">.'
+    ? 'You are an expert professional document writer. Write the complete, properly formatted document requested by the user.\n\nSTRICT RULES:\n1. Match the exact document type requested (e.g., report, proposal, contract, agreement, checklist, table, memo, letter, or email).\n2. ONLY include a Date, Salutation, Sign-off, or Signature if the user explicitly asked for a letter or correspondence. NEVER format reports, proposals, agreements, forms, or general documents as an email or letter.\n3. NEVER include email headers (Subject:, To:, From:) unless the user explicitly asked for an email or memo.\n4. Output ONLY the document text itself. NEVER output numbered status reports (1. Changed..., 2. Verified..., 3. Assumption...) or HTML tags such as <div class="toast">.'
     : baseSystemPrompt;
 
   if (state.isWebConnectivityActive && state.webScrapeEnabled) {
@@ -3849,7 +3849,10 @@ async function sendMessage() {
     apiMessages = apiMessages.concat(history);
   }
   if (isDocWritingRequest) {
-    finalPrompt += '\n\n[INSTRUCTION: Write ONLY the complete, formatted letter/document text itself (including Date, Salutation, Body paragraphs, Sign-off, and Signature). Do NOT output a numbered report, summary, or HTML tags.]';
+    const isLetterOrEmail = /\b(letter|email|memo|memorandum|correspondence)\b/i.test(text);
+    finalPrompt += isLetterOrEmail
+      ? '\n\n[INSTRUCTION: Write ONLY the complete, formatted correspondence requested. Only include Subject/To/From headers if an email or memo was explicitly requested. Do NOT output a numbered report, summary, or HTML tags.]'
+      : '\n\n[INSTRUCTION: Write ONLY the complete, structured document text itself matching the exact document type requested. Do NOT format this as an email or letter—no Subject:, To:, From:, Dear..., or Sincerely sign-offs. Do NOT output a numbered status report or HTML tags.]';
   }
   apiMessages.push({ role: 'user', content: finalPrompt });
 

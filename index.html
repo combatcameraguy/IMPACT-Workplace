@@ -2248,9 +2248,42 @@ let state = {
 const defaultSettings = {
   endpoint: 'http://192.168.1.195:8000/ollama', 
   temperature: 0.1, topP: 0.9, contextLength: 131072, repeatPenalty: 1.1, gpuLayers: 99,
-  systemPrompt: 'You are a helpful AI assistant and professional document writer. When asked to write a letter, email, memo, report, or document, output the actual complete formatted document directly. Never output numbered engineering reports, status summaries, or raw HTML tags like <div class="toast"> in your chat response. Never use emoji or emoticon in response. Never use ## headers, ** bolding, or -- dividers.',
+  systemPrompt: 'You are a helpful, versatile AI assistant. Answer conversational questions, general knowledge queries, and live web research naturally and directly. When the user explicitly asks you to write a letter, email, memo, report, or document, output the complete formatted document. Never output numbered engineering status reports or raw HTML tags like <div class="toast"> in your chat response. Never use emoji or emoticon in response. Never use ## headers, ** bolding, or -- dividers.',
   memoryContext: '', agentTools: JSON.stringify([{type:'function',function:{name:'web_search',description:'Search the web for information'}}],null,2)
 };
+
+const CODER_MEMORY_PATTERNS = /autonomous coding agent|When you are done,\s*report in plain text|CODER MANDATE|INSPECT THE REPOSITORY|What you changed,\s*file by file|No files were changed|No verification was performed|functioning optimally as an autonomous coding agent|professional document writer/i;
+
+function isCoderPollutedText(str) {
+  if (!str) return false;
+  return CODER_MEMORY_PATTERNS.test(str);
+}
+
+function purgeCoderFromMemory() {
+  if (isCoderPollutedText(state.settings.systemPrompt)) {
+    state.settings.systemPrompt = defaultSettings.systemPrompt;
+  }
+  if (isCoderPollutedText(state.settings.memoryContext)) {
+    state.settings.memoryContext = '';
+  }
+  localStorage.setItem('aiHub_settings', JSON.stringify(state.settings));
+
+  let docsChanged = false;
+  if (Array.isArray(state.memoryDocs)) {
+    state.memoryDocs.forEach(doc => {
+      const isCodeDoc = /\.(html?|js|ts|jsx|tsx|css|py|json|sh)$/i.test(doc.name || '');
+      if ((isCodeDoc || isCoderPollutedText(doc.content)) && doc.enabled !== false) {
+        doc.enabled = false;
+        docsChanged = true;
+      }
+    });
+    if (docsChanged) {
+      saveMemoryDocsToStorage();
+      updateMemorySize();
+    }
+  }
+  syncAdvancedInputs();
+}
 
 Object.keys(defaultSettings).forEach(k => { if(!(k in state.settings)) state.settings[k] = defaultSettings[k]; });
 
@@ -2275,15 +2308,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('coderPanel')?.classList.add('collapsed');
   state.sidebarOpen = false;
   state.coderOpen = false;
-  if (state.settings.systemPrompt && (
-    state.settings.systemPrompt.includes('autonomous coding agent') ||
-    state.settings.systemPrompt.includes('When you are done, report in plain text') ||
-    state.settings.systemPrompt.includes('You are a helpful AI assistant with agentic capabilities')
-  )) {
-    state.agentMode = 'chat';
-    state.settings.systemPrompt = defaultSettings.systemPrompt;
-    localStorage.setItem('aiHub_settings', JSON.stringify(state.settings));
-  }
+  state.agentMode = 'chat';
+  purgeCoderFromMemory();
   applyTheme(state.currentTheme);
   populateThemeGrids();
   populateModalThemeGrid();
@@ -2808,15 +2834,27 @@ function newChat() {
   showToast('New conversation created', 'success');
 }
 
+function isDocumentCreationQuery(queryText) {
+  if (!queryText) return false;
+  if (/^\s*(thanks|thank\s+you|thx|appreciate|got\s+it|ok|okay|great|awesome)\b/i.test(queryText) && !/\b(now\s+write|please\s+write|can\s+you\s+write|can\s+you\s+draft|write\s+a\s+new)\b/i.test(queryText)) {
+    return false;
+  }
+  return /\b(write|draft|create|compose|generate|prepare|format)\s+(?:me\s+)?(?:a|an|the|this|my|our)?\s*(?:formal\s+|official\s+|professional\s+|short\s+|brief\s+)?(letter|email|memo|memorandum|notice|report|document|doc|docx|pdf|xlsx|spreadsheet|proposal|contract|agreement|form|w-?9|w-?4|1099|sf-?424|i-?9|invoice|receipt|resume|cover\s+letter|agenda|minutes|application|grant\s+proposal)\b|\b(printable\s+document|save\s+as\s+a?\s*(?:word|pdf|doc)|blank\s+w-?9)\b/i.test(queryText);
+}
+
 function loadChat(id) {
   state.currentChatId = id; 
   const chat = state.conversations[id]; 
   if(!chat) return;
   document.getElementById('messagesContainer').innerHTML = '';
   document.getElementById('welcomeScreen').style.display = 'none';
-  setAgentMode(chat.agentMode || 'chat', null);
-  chat.messages.forEach(msg => {
-    appendMessageToUI(msg.role, msg.content, false, null, msg.sources);
+  const targetMode = (!state.coderOpen && chat.agentMode === 'coder_agent') ? 'chat' : (chat.agentMode || 'chat');
+  chat.agentMode = targetMode;
+  setAgentMode(targetMode, null);
+  chat.messages.forEach((msg, idx) => {
+    const prevUserText = (msg.role === 'assistant' && idx > 0) ? (chat.messages[idx - 1]?.content || '') : '';
+    const showDocActions = msg.showDocActions === true || (msg.role === 'assistant' && isDocumentCreationQuery(prevUserText));
+    appendMessageToUI(msg.role, msg.content, false, null, msg.sources, showDocActions);
   });
   renderChatList(); 
   scrollToBottom();
@@ -3233,12 +3271,19 @@ When you are done, report in plain text:
 
 Be concise. Do not re-explain the task. Do not pad the report.`
   };
+  if (mode !== 'coder_agent') {
+    purgeCoderFromMemory();
+  }
   state.settings.systemPrompt = prompts[mode] || defaultSettings.systemPrompt;
   if (state.currentChatId && state.conversations[state.currentChatId]) {
     state.conversations[state.currentChatId].agentMode = mode;
     saveConversations();
   }
   syncAgentGlowUI();
+  const advInput = document.getElementById('advSystemPrompt');
+  if (advInput) advInput.value = state.settings.systemPrompt;
+  const modalInput = document.getElementById('modalSystemPrompt');
+  if (modalInput) modalInput.value = state.settings.systemPrompt;
   saveAdvancedSettings();
 }
 
@@ -3708,13 +3753,24 @@ async function sendMessage() {
     }
   }
 
-  const activeMemoryDocs = (state.memoryDocs || []).filter(d => d.enabled !== false && d.content && !includedDocNames.has(d.name));
+  if (!state.coderOpen && state.agentMode !== 'coder_agent') {
+    purgeCoderFromMemory();
+  }
+
+  const activeMemoryDocs = (state.memoryDocs || []).filter(d => {
+    if (d.enabled === false || !d.content || includedDocNames.has(d.name)) return false;
+    if (!state.coderOpen && state.agentMode !== 'coder_agent') {
+      const isCodeDoc = /\.(html?|js|ts|jsx|tsx|css|py|json|sh)$/i.test(d.name || '');
+      if (isCodeDoc || isCoderPollutedText(d.content)) return false;
+    }
+    return true;
+  });
   for (const doc of activeMemoryDocs) {
     includedDocNames.add(doc.name);
     docContextBlocks.push(`=== ACTIVE KNOWLEDGE BASE DOCUMENT: ${doc.name} ===\n${doc.content.substring(0, 250000)}\n=== END OF ${doc.name} ===`);
   }
 
-  if (state.settings.memoryContext && state.settings.memoryContext.trim()) {
+  if (state.settings.memoryContext && state.settings.memoryContext.trim() && !isCoderPollutedText(state.settings.memoryContext)) {
     docContextBlocks.push(`=== MEMORY CONTEXT ===\n${state.settings.memoryContext.trim()}\n=== END MEMORY CONTEXT ===`);
   }
 
@@ -3750,8 +3806,9 @@ async function sendMessage() {
     finalPrompt += `\n\n[Verified Official Government Form Links]:\n${formList}\nInstruction: Provide the direct official link(s) clearly and let the user know they can click the "Save File" button below to download the blank form directly to their PC or iOS device.`;
   }
 
+  const isDocWritingRequest = isDocumentCreationQuery(text);
   const msgId = 'msg_' + Date.now();
-  appendMessageToUI('assistant', '', true, msgId);
+  appendMessageToUI('assistant', '', true, msgId, null, isDocWritingRequest);
   state.isStreaming = true; 
   state.abortController = new AbortController(); 
   updateSendButton(true);
@@ -3759,10 +3816,20 @@ async function sendMessage() {
   const msgEl = document.querySelector(`[data-msg-id="${msgId}"] .message-text`);
 
   let apiMessages = [];
-  const isDocWritingRequest = /\b(write|draft|create|compose|generate|prepare|format|make)\b[\s\S]{0,60}\b(letter|email|memo|notice|report|document|proposal|contract|agreement|note|message)\b|\b(dear|sincerely|signed|to mr|to mrs|to ms|to dr)\b/i.test(text);
+  let baseSystemPrompt = state.settings.systemPrompt || defaultSettings.systemPrompt;
+  if (state.agentMode !== 'coder_agent' && isCoderPollutedText(baseSystemPrompt)) {
+    baseSystemPrompt = defaultSettings.systemPrompt;
+    state.settings.systemPrompt = defaultSettings.systemPrompt;
+  }
+
   let systemContent = isDocWritingRequest
-    ? 'You are an expert professional letter and document writer. Your ONLY job is to write the complete, properly formatted letter, email, or document requested by the user.\n\nSTRICT RULES:\n1. Output ONLY the actual letter or document text from start to finish (Date, Salutation, Body Paragraphs, Closing, and Signature).\n2. NEVER output numbered status reports (1. Changed..., 2. Verified..., 3. Assumption...).\n3. NEVER describe what you did—actually write the letter itself in first-person voice matching the user request.\n4. NEVER output HTML tags such as <div class="toast">.'
-    : (state.settings.systemPrompt || defaultSettings.systemPrompt);
+    ? 'You are an expert professional letter and document writer. Write the complete, properly formatted letter, email, or document requested by the user.\n\nSTRICT RULES:\n1. Output ONLY the actual letter or document text from start to finish (Date, Salutation, Body Paragraphs, Closing, and Signature).\n2. NEVER output numbered status reports (1. Changed..., 2. Verified..., 3. Assumption...).\n3. NEVER output HTML tags such as <div class="toast">.'
+    : baseSystemPrompt;
+
+  if (state.isWebConnectivityActive && state.webScrapeEnabled) {
+    systemContent += '\n\nLIVE WEB ACCESS ENABLED: You have active real-time internet search and web scraping capabilities via the local Tavily integration. When live web search results or scraped page contents are provided in the prompt, use them directly to answer current news, headlines, and real-time facts. Never claim that you lack internet access or cannot browse live data.';
+  }
+
   if (state.reasoningEnabled && !isDocWritingRequest) {
     systemContent += '\n\nExtended Reasoning Enabled: Think carefully step-by-step through complex problems before delivering your final answer.';
   }
@@ -3772,7 +3839,12 @@ async function sendMessage() {
   if (state.preserveThinking) {
     const history = chat.messages
       .slice(0, -1)
-      .filter(m => !/1\.\s*Changed|2\.\s*Verified|<div class=["']toast/i.test(m.content || ''))
+      .filter(m => {
+        const c = m.content || '';
+        if (/1\.\s*(?:Changed|No files were changed|I did not change)|2\.\s*(?:Verified|No verification|I verified)|<div class=["']toast/i.test(c)) return false;
+        if (state.agentMode !== 'coder_agent' && isCoderPollutedText(c)) return false;
+        return true;
+      })
       .map(m => ({ role: m.role, content: m.content }));
     apiMessages = apiMessages.concat(history);
   }
@@ -3872,7 +3944,7 @@ async function sendMessage() {
     if (searchSources.length > 0) {
       msgEl.insertAdjacentHTML('beforeend', renderSourcesHTML(searchSources));
     }
-    chat.messages.push({ role: 'assistant', content: fullContent, ...(searchSources.length > 0 ? { sources: searchSources } : {}) });
+    chat.messages.push({ role: 'assistant', content: fullContent, showDocActions: isDocWritingRequest, ...(searchSources.length > 0 ? { sources: searchSources } : {}) });
     saveConversations();
   } catch(err) {
     clearInterval(hudTimer);
@@ -3913,7 +3985,7 @@ function appendMessageWithAttachments(role, content, attachments) {
   }
 }
 
-function appendMessageToUI(role, content, empty = false, msgId = null, sources = null) {
+function appendMessageToUI(role, content, empty = false, msgId = null, sources = null, showDocActions = false) {
   const container = document.getElementById('messagesContainer'); 
   const div = document.createElement('div'); 
   div.className = `message ${role}`; 
@@ -3924,7 +3996,7 @@ function appendMessageToUI(role, content, empty = false, msgId = null, sources =
     ? `<button class="edit-query-btn" onclick="editMessage(this)" title="Edit & Resubmit">${ICONS.edit}</button>` 
     : '';
 
-  const docActionsHtml = role === 'assistant'
+  const docActionsHtml = (role === 'assistant' && showDocActions)
     ? `<div class="doc-export-group">
         <button class="doc-export-btn primary-save" onclick="exportMessageDocument(this, 'doc')" title="Save formatted Word Document (.doc) with zero browser bloat">${ICONS.download}<span>Save Word (.doc)</span></button>
         <button class="doc-export-btn" onclick="exportMessageDocument(this, 'pdf')" title="Download clean binary PDF (.pdf) with no browser headers/footers">${ICONS.download}<span>Save PDF</span></button>
@@ -4673,11 +4745,16 @@ function toggleCoderPanel() {
     if (sidebar && sidebar.classList.contains('collapsed')) {
       toggleSidebar();
     }
+    if (state.isStreaming && state.agentMode === 'coder_agent') stopGeneration();
+    purgeCoderFromMemory();
     if (state.agentMode === 'coder_agent') {
-      if (state.isStreaming) stopGeneration();
       setAgentMode('chat', null);
-      showToast('Coder Agent deactivated', 'info');
+    } else {
+      state.settings.systemPrompt = defaultSettings.systemPrompt;
+      syncAgentGlowUI();
+      saveAdvancedSettings();
     }
+    showToast('Coder memory cleared — Default Assistant active', 'info');
   }
 }
 
@@ -4849,10 +4926,7 @@ async function loadSelfIntoCoder() {
   updateCoderLineNumbers();
   updateSyntaxHighlighting();
 
-  const fakeFile = new File([fullHtml], 'index.html', { type: 'text/html' });
-  storeDocumentInMemory(fakeFile, fullHtml);
-
-  showToast('Loaded clean IMPACT Workspace source into editor & memory', 'success');
+  showToast('Loaded clean IMPACT Workspace source into Coder Studio', 'success');
 }
 
 async function sendCoderToAI() {
